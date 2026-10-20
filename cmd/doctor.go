@@ -68,6 +68,20 @@ Never prints passwords or raw tokens.`,
 				}
 				checks = append(checks, check{Name: "namespaces", OK: ok, Detail: detail})
 				report["probe"] = probe
+				state := a.client.ServerState(cmd.Context())
+				report["server_state"] = state
+				if ver, _ := state["version"].(string); ver != "" {
+					checks = append(checks, check{Name: "server_version", OK: true, Detail: ver})
+				} else if sok, _ := state["ok"].(bool); sok {
+					checks = append(checks, check{Name: "server_version", OK: true, Detail: "state ok (no version field)"})
+				} else {
+					// Best-effort: do not fail doctor solely on missing console state.
+					det := "unavailable"
+					if e, has := state["error"].(string); has && e != "" {
+						det = e
+					}
+					checks = append(checks, check{Name: "server_version", OK: true, Detail: det})
+				}
 			}
 
 			report["checks"] = checks

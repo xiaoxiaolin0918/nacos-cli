@@ -2,7 +2,8 @@
 
 ## Status
 
-Go mainline with ACL + **multi-profile** + **`--output` alias**.  
+Go mainline **v0.3.0**: ACL + multi-profile + `--output` + **REPL** + **config export** + **backup** + GitHub Actions CI.
+
 Python v0 in `archive/python-v0`. `backups/` gitignored.
 
 ## Module
@@ -16,37 +17,44 @@ cd D:\work\ops\nacos-cli
 $env:PATH = "D:\tools\go\bin;" + $env:PATH
 $env:GOPROXY = "goproxy.cn,direct"
 go test ./...
-go build -o nacos.exe .
+make build   # or: go build -o nacos.exe .
+.\nacos.exe --version
 ```
 
 ## Commands
 
-config / service / namespace / user / role / permission / auth / doctor / whoami / **profile** / skills
+config (+ export) / service / namespace / user / role / permission / auth / doctor / whoami / profile / skills / **backup** / **repl**
 
 Gates: `--dry-run` / `--yes` (exit 10). ACL + profile show never print password values.
 
-### Profile (P1 done)
+### REPL / export / backup (P2)
 
 ```powershell
-.\nacos.exe profile set lab --server http://127.0.0.1:8848 --username nacos
-.\nacos.exe --profile lab namespace list --output json
-.\nacos.exe --config $env:USERPROFILE\.nacos-cli\lab.conf whoami
-.\nacos.exe profile show lab
-.\nacos.exe profile delete lab --yes
+.\nacos.exe repl
+.\nacos.exe config export --data-id app.yaml --out .\app.yaml
+.\nacos.exe backup create --all --group DEFAULT_GROUP --dry-run
+.\nacos.exe backup list
 ```
 
-Layout: `~/.nacos-cli/<name>.conf` (YAML). Priority: flags > `--config` > `--profile` > env/.env.
+Doctor best-effort probes `/v1/console/server/state` (version) without failing the whole check.
 
-### Output (P1 done)
+## Official CLI borrow
 
-`--format json|pretty` (default **json**). `--output` is an official-CLI alias of `--format`.
+| Priority | Item | Status |
+|----------|------|--------|
+| P1 | profile + `--output` | Done |
+| P2 | REPL | Done (writes still gated per line) |
+| P2 | v1/v3 API detect | Partial: doctor server_state; adapter later |
+| P3 | AgentSpec / Releases | Optional |
 
-## Official CLI
+## Suggested stop
 
-nacos-group/nacos-cli: AI Skill/AgentSpec/config; no naming up-down or RBAC ACL — this ops CLI fills that.
+Ops surface + gates + profile + REPL + export/backup + CI is enough for daily lab use.
 
-## Next
+## Remaining optional
 
-- P2: interactive REPL; v1/v3 API detect
-- Optional: Releases/CI; auth-enabled lab ACL smoke only with user approval
+- Auth-enabled lab ACL smoke (needs user approval)
+- Multi-arch Releases / installers
+- Full v3 Bearer client adapter
+- AgentSpec lifecycle (only if Nacos AI registry deployed)
 - Do **not** touch live prod without explicit approval

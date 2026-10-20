@@ -1,7 +1,7 @@
 ---
 name: nacos-config-ops
 version: 0.2.0
-description: "Nacos config ops: config get/list/publish/history/rollback. publish defaults to create-only; overwrite needs --overwrite. Risk: read | write (publish/rollback need --yes or --dry-run)."
+description: "Nacos config ops: config get/list/publish/history/rollback/export. publish defaults to create-only; overwrite needs --overwrite. Risk: read | write (publish/rollback need --yes or --dry-run)."
 metadata:
   requires:
     bins: ["nacos", "go"]
@@ -56,3 +56,10 @@ nacos config rollback --data-id nacos-cli-smoke.yaml --nid <id> --yes
 | Exit 10 / missing `--yes` | Show dry-run; ask user; re-run with `--yes` |
 | Exists under create-only (default) | Choose a new dataId, or only if user asks: `--overwrite` |
 | Empty history | Cannot rollback; publish a new version instead |
+
+## Export
+
+```powershell
+.\nacos.ps1 config export --data-id app.yaml --out .\app.yaml
+.\nacos.ps1 backup create --data-id app.yaml --dry-run
+```

@@ -18,3 +18,7 @@ login.key
 # local profiles must never be committed
 .nacos-cli/
 *.conf
+# local agent scratch writers
+_write_*.py
+_apply_*.py
+_fix_*.py

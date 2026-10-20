@@ -11,13 +11,14 @@ import (
 )
 
 func (a *App) newConfigCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "config", Short: "Config center: get/list/publish/history/rollback", RunE: helpOnly}
+	cmd := &cobra.Command{Use: "config", Short: "Config center: get/list/publish/history/rollback/export", RunE: helpOnly}
 	cmd.AddCommand(
 		a.newConfigGetCmd(),
 		a.newConfigListCmd(),
 		a.newConfigPublishCmd(),
 		a.newConfigHistoryCmd(),
 		a.newConfigRollbackCmd(),
+		a.newConfigExportCmd(),
 	)
 	return cmd
 }

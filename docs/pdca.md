@@ -1,5 +1,24 @@
 # PDCA — nacos-cli
 
+## Cycle 2026-10-21 (P2 REPL + export/backup + CI)
+
+### Plan
+Land unfinished P2 work: interactive REPL, config export, local backup, GitHub Actions CI, Makefile VERSION/ldflags, docs. No secrets; no prod writes. Push when `go test ./...` green.
+
+### Do
+- Wire `repl` / `backup` into root; `config export` into config
+- `internal/repl` tokenizer; `internal/backup` + `domain` export helpers + tests
+- Doctor best-effort `ServerState` version probe
+- `.github/workflows/ci.yml`; Makefile `VERSION`/`LDFLAGS`; version bump **0.3.0** (var + UserAgent())
+- Docs: README / AGENTS / HANDOFF / wiki / pdca / skills shared+config
+
+### Check
+`go test ./...` green; `nacos --version` → 0.3.0; help lists backup/repl/export.
+
+### Act
+P2 REPL/export/backup/CI closed. Remaining optional: Releases, v3 adapter, AgentSpec, auth-enabled ACL smoke with approval.
+
+
 ## Cycle 2026-10-21 (P1 profile + --output)
 
 ### Plan
@@ -57,7 +76,7 @@ Do **not** wholesale rewrite our command surface. Pick high-value gaps.
 |----------|------|----------------|
 | P1 | --output json / pretty (or keep --format) | **Done 2026-10-21** — `--output` aliases `--format`; default stays `json` |
 | P1 | Profile (~/.nacos-cli/*.conf, profile show/set, --profile) | **Done 2026-10-21** — list/show/path/set/delete; `--config` overrides |
-| P2 | Interactive terminal (nacos> REPL) | Later; keep non-interactive gates mandatory for writes |
+| P2 | Interactive terminal (nacos> REPL) | **Done 2026-10-21** — `nacos repl` / bare TTY; gates per line |
 | P2 | Server version detect (v1 vs v3 API / Bearer) | Lab is 2.4.x (v1); design behind client adapter |
 | P3 | AI Skill / AgentSpec lifecycle | Only if our Nacos deploys AI registry |
 | P3 | Installer / npm / multi-arch Releases | Match plumelog when we cut v0.1 |

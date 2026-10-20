@@ -74,10 +74,15 @@ Risk:
   high-risk-write  requires --yes; --dry-run previews without calling Nacos
 
 Config: flags > --config > --profile > env > .env > defaults.
-Skills: nacos skills list|read|path`,
+Skills: nacos skills list|read|path
+
+Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version.Version,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return maybeStartReplOnRoot(a, cmd, args)
+		},
 	}
 	root.SetVersionTemplate("{\"ok\":true,\"result\":{\"name\":\"nacos-cli\",\"version\":\"{{.Version}}\"}}\n")
 	root.CompletionOptions.DisableDefaultCmd = true
@@ -106,6 +111,8 @@ Skills: nacos skills list|read|path`,
 		a.newRoleCmd(),
 		a.newPermissionCmd(),
 		a.newProfileCmd(),
+		a.newBackupCmd(),
+		a.newReplCmd(),
 	)
 	silence(root)
 	return root

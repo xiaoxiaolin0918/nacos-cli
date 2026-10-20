@@ -39,7 +39,10 @@ Or use a **profile** (official layout `~/.nacos-cli/<name>.conf`):
 $env:PATH = "D:\tools\go\bin;" + $env:PATH
 $env:GOPROXY = "goproxy.cn,direct"
 go test ./...
+go test ./...
 go build -o nacos.exe .
+# or: make test && make build
+.\nacos.exe --version
 .\nacos.exe --help
 # or
 .\nacos.ps1 --help
@@ -127,6 +130,32 @@ Writes need **`--dry-run`** (preview) or **`--yes`/`-y`** (execute). Missing gat
 ```
 
 Requires auth-enabled Nacos + admin login. Passwords never appear in dry-run JSON.
+
+### Config export / local backup
+
+Read-only against Nacos; writes local files only (`backups/` is gitignored).
+
+```powershell
+.\nacos.exe config export --data-id app.yaml --group DEFAULT_GROUP --out .\out\app.yaml
+.\nacos.exe config export --all --group DEFAULT_GROUP --dir .\export-out --page-size 100
+.\nacos.exe backup path
+.\nacos.exe backup list
+.\nacos.exe backup create --data-id app.yaml --group DEFAULT_GROUP --dry-run
+.\nacos.exe backup create --all --group DEFAULT_GROUP
+```
+
+### Interactive REPL (P2)
+
+```powershell
+.\nacos.exe repl
+# or bare `nacos` on a TTY
+# nacos> namespace list --output pretty
+# nacos> config publish --data-id x --content "k: v" --dry-run
+# nacos> exit
+```
+
+High-risk writes still need `--dry-run` or `--yes` on each line.
+
 
 ## Methodology
 

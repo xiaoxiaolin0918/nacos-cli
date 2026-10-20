@@ -63,7 +63,7 @@ func (c *Client) Login(ctx context.Context, username, password string) (LoginRes
 		return LoginResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", version.UserAgent)
+	req.Header.Set("User-Agent", version.UserAgent())
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return LoginResult{}, err
@@ -132,7 +132,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 		u += "?" + q.Encode()
 	}
 	var body io.Reader
-	headers := map[string]string{"User-Agent": version.UserAgent, "Accept": "application/json, text/plain, */*"}
+	headers := map[string]string{"User-Agent": version.UserAgent(), "Accept": "application/json, text/plain, */*"}
 	if form != nil {
 		body = strings.NewReader(form.Encode())
 		headers["Content-Type"] = "application/x-www-form-urlencoded"
@@ -376,7 +376,7 @@ func (c *Client) Ping(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", version.UserAgent)
+	req.Header.Set("User-Agent", version.UserAgent())
 	res, err := c.HTTP.Do(req)
 	if err != nil {
 		return 0, err

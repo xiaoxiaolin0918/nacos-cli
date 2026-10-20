@@ -1,7 +1,7 @@
 ---
 name: nacos-shared
 version: 0.3.0
-description: "Use for nacos-cli (Go) setup/auth: auth login/status/logout (--web), whoami, doctor, .env + local credentials file, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output. Risk: read (status/doctor) | write (login)."
+description: "Use for nacos-cli (Go) setup/auth: auth login/status/logout (--web), whoami, doctor, .env + local credentials file, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output, repl/interactive shell, backup path/list/create. Risk: read (status/doctor) | write (login)."
 metadata:
   requires:
     bins: ["nacos", "go"]
@@ -56,6 +56,13 @@ Success stdout JSON `{ok,result}`. Failures on stderr; never print raw token (on
 .\nacos.ps1 skills read nacos-shared
 ```
 
+
+## REPL / backup (P2)
+
+```powershell
+.\nacos.ps1 repl
+.\nacos.ps1 backup create --all --group DEFAULT_GROUP --dry-run
+```
 
 ## Profiles and output (P1)
 

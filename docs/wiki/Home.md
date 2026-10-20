@@ -25,3 +25,14 @@ Go 主实现；仓库入口见根目录 `README.md` / `AGENTS.md`。
 ```
 
 优先级：flags > `--config` > `--profile` > env / `.env` > defaults。
+
+## Export / Backup / REPL
+
+```powershell
+.\nacos.exe config export --data-id app.yaml --out .\app.yaml
+.\nacos.exe backup create --all --group DEFAULT_GROUP --dry-run
+.\nacos.exe repl
+```
+
+本地备份目录默认 `./backups`（可用 `NACOS_BACKUP_DIR`），已 gitignore。REPL 内写操作仍需 `--dry-run` / `--yes`。
+

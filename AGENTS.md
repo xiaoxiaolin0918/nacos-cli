@@ -27,7 +27,7 @@ nacos-cli/
   AGENTS.md / HANDOFF.md / README.md
   main.go / go.mod / Makefile / nacos.ps1
   cmd/
-  internal/domain|client|config|credstore|risk|output|version
+  internal/domain|client|config|credstore|risk|output|version|backup|repl
   skills/
   docs/pdca.md / docs/wiki/
   backups/                 # gitignored
@@ -40,7 +40,7 @@ Profiles live **outside** the repo: `~/.nacos-cli/<name>.conf` (YAML). Never com
 
 | Group | Actions |
 |-------|---------|
-| `config` | `get` `list` `publish` `history` `rollback` |
+| `config` | `get` `list` `publish` `history` `rollback` `export` |
 | `service` | `list` `instances` `register` `deregister` `up` `down` |
 | `namespace` | `list` |
 | `user` | `list` `create` `delete` `passwd` |
@@ -50,6 +50,8 @@ Profiles live **outside** the repo: `~/.nacos-cli/<name>.conf` (YAML). Never com
 | `whoami` / `doctor` | read-only session / connectivity |
 | `profile` | `list` `show` `path` `set` `delete` |
 | `skills` | `list` `read` `path` |
+| `backup` | `path` `list` `create` |
+| `repl` | interactive shell (aliases: `interactive`, `shell`) |
 
 ACL uses Open API `/v1/auth/users|roles|permissions` (RBAC). Needs auth-enabled Nacos + admin token.
 
@@ -96,6 +98,7 @@ $env:PATH = "D:\tools\go\bin;" + $env:PATH
 $env:GOPROXY = "goproxy.cn,direct"
 go test ./...
 go build -o nacos.exe .
+# or: make test && make build   # VERSION default 0.3.0, overridable
 ```
 
 ## Official CLI note
