@@ -1,0 +1,17 @@
+﻿.env
+*.exe
+/nacos
+/nacos-cli
+/bin/
+/dist/
+.idea/
+.vscode/
+*.test
+coverage.out
+backups/
+__pycache__/
+.pytest_cache/
+*.pyc
+credentials.json
+login.cred
+login.key
