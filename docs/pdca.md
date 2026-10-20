@@ -1,5 +1,24 @@
 # PDCA — nacos-cli
 
+## Cycle 2026-10-21 (P1 profile + --output)
+
+### Plan
+Borrow official P1: multi-profile (`~/.nacos-cli/*.conf`, `--profile`, `--config`) and global `--output` alias for `--format`. Align docs/tests with plumelog habits. TDD; push GitHub; update HANDOFF/pdca. No prod writes; no secrets in git.
+
+### Do
+- `internal/config/profile.go` (+ tests): YAML load/save/list/delete, host+port compose, MergeSettings, NormalizeFormat, password redaction
+- `cmd/profile.go`: list / show / path / set / delete (`delete` high-risk)
+- Root flags: `--profile`, `--config`/`-c`, `--output`
+- Resolve priority: flags > --config > --profile > env/.env > defaults
+- Docs: README / AGENTS / HANDOFF / wiki / skills shared
+- `.gitignore`: `.nacos-cli/`, `*.conf`
+
+### Check
+`go test ./...` green (config profile suite + cmd profile/output suite + output package).
+
+### Act
+P1 closed. Next borrow: P2 REPL / API v3 detect. Keep gates. Optional Releases/CI.
+
 ## Cycle 2026-10-20 (Go rewrite)
 
 ### Plan
@@ -32,18 +51,17 @@ Next: optional Releases/CI; auth-enabled lab ACL smoke only with user approval.
 
 Reference: https://github.com/nacos-group/nacos-cli and https://nacos.io/docs/latest/manual/admin/nacos-cli/
 
-Do **not** wholesale rewrite our command surface this cycle. Pick high-value gaps later.
+Do **not** wholesale rewrite our command surface. Pick high-value gaps.
 
-| Priority | Item | Why / notes for this ops CLI |
-|----------|------|------------------------------|
-| P1 | --output json / pretty (or keep --format) | Align scripting contract with official; we already have --format json|pretty — document parity, avoid dual flags unless needed |
-| P1 | Profile (~/.nacos-cli/*.conf, profile edit/show, --profile) | Multi-env ops without juggling .env; map to our settings + credstore carefully (never store password in repo) |
-| P2 | Interactive terminal (
-acos> REPL: help/ns/server/quit) | Faster ops exploration; optional later, keep non-interactive gates (--yes/--dry-run) mandatory for writes |
-| P2 | Server version detect (v1 vs v3 API / Bearer) | Lab is 2.4.x (v1); future 3.x needs /v3/auth/* path — design behind client adapter |
-| P3 | AI Skill / AgentSpec lifecycle | Official focus; only if our Nacos deploys AI registry — not core ops ACL/naming |
-| P3 | Installer / npm / multi-arch Releases | Match plumelog Releases habit when we cut v0.1 |
-| skip-for-now | Naming up/down in official | Official marks naming ❌ — we already cover register/up/down; no borrow needed |
-| skip-for-now | RBAC ACL in official | Official docs do not expose user/role/permission CLI — our ACL stays differentiating |
+| Priority | Item | Status / notes |
+|----------|------|----------------|
+| P1 | --output json / pretty (or keep --format) | **Done 2026-10-21** — `--output` aliases `--format`; default stays `json` |
+| P1 | Profile (~/.nacos-cli/*.conf, profile show/set, --profile) | **Done 2026-10-21** — list/show/path/set/delete; `--config` overrides |
+| P2 | Interactive terminal (nacos> REPL) | Later; keep non-interactive gates mandatory for writes |
+| P2 | Server version detect (v1 vs v3 API / Bearer) | Lab is 2.4.x (v1); design behind client adapter |
+| P3 | AI Skill / AgentSpec lifecycle | Only if our Nacos deploys AI registry |
+| P3 | Installer / npm / multi-arch Releases | Match plumelog when we cut v0.1 |
+| skip-for-now | Naming up/down in official | We already cover register/up/down |
+| skip-for-now | RBAC ACL in official | Official docs lack user/role/permission CLI — our ACL differentiates |
 
 Act when borrowed: add failing tests first; keep Risk gates; update skills + pdca Check.

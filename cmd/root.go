@@ -20,19 +20,24 @@ type App struct {
 	flagServer   string
 	flagUsername string
 	flagFormat   string
+	flagOutput   string
 	flagDryRun   bool
 	flagYes      bool
 	flagTimeout  string
-	flagConfig   string // path to .env override unused for now; reserved
+	flagConfig   string
+	flagProfile  string
 	flagNS       string
 
-	settings config.Settings
-	format   string
-	dryRun   bool
-	yes      bool
-	client   *client.Client
-	credPath string
-	secrets  []string
+	settings    config.Settings
+	format      string
+	dryRun      bool
+	yes         bool
+	client      *client.Client
+	credPath    string
+	secrets     []string
+	profileName string
+	profile     config.Profile
+	configFile  string
 }
 
 func Main() int {
@@ -59,11 +64,16 @@ func NewRoot() *cobra.Command {
 Auth uses accessToken from POST /v1/auth/login (or AUTH_DISABLED).
 Credentials (token only, never password) live under the OS config dir.
 
+Profiles: ~/.nacos-cli/<name>.conf (YAML). Select with --profile (default: default)
+or an explicit file via --config. Priority: flags > --config > --profile > env/.env > defaults.
+
+Output: --format json|pretty (default json). --output is an alias for official CLI parity.
+
 Risk:
   read             runs immediately
   high-risk-write  requires --yes; --dry-run previews without calling Nacos
 
-Config: flags > env > .env > defaults.
+Config: flags > --config > --profile > env > .env > defaults.
 Skills: nacos skills list|read|path`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -77,7 +87,10 @@ Skills: nacos skills list|read|path`,
 	p.StringVar(&a.flagServer, "server", "", "Nacos server root, e.g. http://127.0.0.1:8848 (env NACOS_SERVER)")
 	p.StringVar(&a.flagUsername, "username", "", "login username (env NACOS_USERNAME)")
 	p.StringVar(&a.flagNS, "namespace", "", "default namespace id (env NACOS_NAMESPACE)")
+	p.StringVar(&a.flagProfile, "profile", "default", "profile name under ~/.nacos-cli/<name>.conf")
+	p.StringVarP(&a.flagConfig, "config", "c", "", "explicit profile file path (overrides --profile)")
 	p.StringVar(&a.flagFormat, "format", "json", "output format: json or pretty")
+	p.StringVar(&a.flagOutput, "output", "", "alias of --format (json|pretty); official CLI parity")
 	p.BoolVar(&a.flagDryRun, "dry-run", false, "print the would-be action and do not call Nacos")
 	p.BoolVarP(&a.flagYes, "yes", "y", false, "confirm a high-risk write")
 
@@ -92,6 +105,7 @@ Skills: nacos skills list|read|path`,
 		a.newUserCmd(),
 		a.newRoleCmd(),
 		a.newPermissionCmd(),
+		a.newProfileCmd(),
 	)
 	silence(root)
 	return root
@@ -130,19 +144,49 @@ func mark(cmd *cobra.Command, level, short string) {
 }
 
 func (a *App) resolve(cmd *cobra.Command, _ []string) error {
-	a.format = a.flagFormat
-	if a.format == "" {
-		a.format = "json"
-	}
 	a.dryRun = a.flagDryRun
 	a.yes = a.flagYes
+	a.profileName = strings.TrimSpace(a.flagProfile)
+	if a.profileName == "" {
+		a.profileName = "default"
+	}
+	a.configFile = strings.TrimSpace(a.flagConfig)
 
-	if isSkillsCommand(cmd) || cmd.Name() == "help" {
+	if isSkillsCommand(cmd) || isProfileCommand(cmd) || cmd.Name() == "help" {
+		// Still resolve format for JSON envelope on profile commands.
+		if err := a.resolveFormat(cmd, config.Profile{}); err != nil {
+			return a.fail(cmd, "", err)
+		}
 		return nil
 	}
 
 	_ = config.LoadDotEnv(config.FindDotEnv())
 	s := config.FromEnv()
+
+	var prof config.Profile
+	var profOK bool
+	if a.configFile != "" {
+		p, ok, err := config.LoadProfileFile(a.configFile)
+		if err != nil {
+			return a.fail(cmd, "", err)
+		}
+		if !ok {
+			return a.fail(cmd, "", fmt.Errorf("--config file not found: %s", a.configFile))
+		}
+		prof, profOK = p, true
+	} else {
+		p, ok, err := config.LoadProfile(a.profileName)
+		if err != nil {
+			return a.fail(cmd, "", err)
+		}
+		// Missing default/named profile is fine; fall through to env/.env.
+		prof, profOK = p, ok
+	}
+	if profOK {
+		s = config.MergeSettings(s, prof)
+		a.profile = prof
+	}
+
 	if changed(cmd, "server") && strings.TrimSpace(a.flagServer) != "" {
 		s.Server = a.flagServer
 	}
@@ -153,6 +197,10 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 		s.Namespace = a.flagNS
 	}
 	a.settings = s
+
+	if err := a.resolveFormat(cmd, prof); err != nil {
+		return a.fail(cmd, "", err)
+	}
 
 	credPath, err := config.CredentialsPath()
 	if err != nil {
@@ -170,6 +218,21 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	a.client = c
+	return nil
+}
+
+func (a *App) resolveFormat(cmd *cobra.Command, prof config.Profile) error {
+	format := a.flagFormat
+	if changed(cmd, "output") && strings.TrimSpace(a.flagOutput) != "" {
+		format = a.flagOutput
+	} else if !changed(cmd, "format") && strings.TrimSpace(prof.Format) != "" {
+		format = prof.Format
+	}
+	norm, err := config.NormalizeFormat(format)
+	if err != nil {
+		return err
+	}
+	a.format = norm
 	return nil
 }
 
@@ -260,7 +323,7 @@ func (a *App) gateHigh(cmd *cobra.Command, action string, would map[string]any) 
 
 func (a *App) requireServer(cmd *cobra.Command) error {
 	if strings.TrimSpace(a.settings.Server) == "" {
-		return a.fail(cmd, "", errors.New("NACOS_SERVER not set; copy .env.example to .env"))
+		return a.fail(cmd, "", errors.New("NACOS_SERVER not set; copy .env.example to .env or use --profile / --server"))
 	}
 	return nil
 }
@@ -282,4 +345,3 @@ func isSkillsCommand(cmd *cobra.Command) bool {
 	}
 	return false
 }
-

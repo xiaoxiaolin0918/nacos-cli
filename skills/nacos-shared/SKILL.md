@@ -1,7 +1,7 @@
 ---
 name: nacos-shared
-version: 0.2.0
-description: "Use for nacos-cli (Go) setup/auth: auth login/status/logout (--web), whoami, doctor, .env + local credentials file, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read. Risk: read (status/doctor) | write (login)."
+version: 0.3.0
+description: "Use for nacos-cli (Go) setup/auth: auth login/status/logout (--web), whoami, doctor, .env + local credentials file, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output. Risk: read (status/doctor) | write (login)."
 metadata:
   requires:
     bins: ["nacos", "go"]
@@ -56,6 +56,19 @@ Success stdout JSON `{ok,result}`. Failures on stderr; never print raw token (on
 .\nacos.ps1 skills read nacos-shared
 ```
 
+
+## Profiles and output (P1)
+
+```powershell
+.\nacos.ps1 profile set lab --server http://127.0.0.1:8848 --username nacos
+.\nacos.ps1 --profile lab namespace list --output json
+.\nacos.ps1 whoami --format pretty
+.\nacos.ps1 profile show lab
+```
+
+- Profiles: `~/.nacos-cli/<name>.conf` (YAML). Never commit. `profile show` masks password.
+- Priority: flags > `--config` > `--profile` > env/.env.
+- `--output` aliases `--format` (`json` default, `pretty` optional).
 ## Failure strategy
 
 | Case | Action |
