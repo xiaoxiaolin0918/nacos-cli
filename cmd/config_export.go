@@ -8,6 +8,7 @@ import (
 
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/backup"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/domain"
+	"github.com/xiaoxiaolin0918/nacos-cli/internal/output"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/risk"
 )
 
@@ -20,7 +21,8 @@ func (a *App) newConfigExportCmd() *cobra.Command {
 		Long: `Export config content to a file or directory (read-only against Nacos).
 
 --out writes one file. --dir writes group/dataId files (safe names).
---all exports the current list page. Without --all, --data-id is required.`,
+--all exports every page across all groups (unless --group / --page is given).
+Without --all, --data-id is required. --dry-run writes nothing and does not call Nacos.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := domain.ValidateExportArgs(dataID, all); err != nil {
 				return a.fail(cmd, risk.Read, err)
@@ -34,12 +36,22 @@ func (a *App) newConfigExportCmd() *cobra.Command {
 			if outFile != "" && all {
 				return a.fail(cmd, risk.Read, errString("--out is for a single data-id; use --dir with --all"))
 			}
-			if err := a.requireServer(cmd); err != nil {
-				return err
-			}
 			filterID := dataID
 			if all {
 				filterID = ""
+				if !cmd.Flags().Changed("group") {
+					group = ""
+				}
+			}
+			allPages := all && !cmd.Flags().Changed("page")
+			if a.dryRun {
+				return a.write(cmd, output.Envelope{OK: true, DryRun: true, Risk: risk.Read, Would: map[string]any{
+					"action": "config.export", "data_id": filterID, "group": group, "namespace": ns,
+					"out": outFile, "dir": dir, "all": all, "all_pages": allPages,
+				}})
+			}
+			if err := a.requireServer(cmd); err != nil {
+				return err
 			}
 			uc := domain.ConfigUseCase{Port: a.client}
 			if outFile != "" {
@@ -63,7 +75,13 @@ func (a *App) newConfigExportCmd() *cobra.Command {
 					"bytes":   len(body),
 				})
 			}
-			entries, err := uc.CollectForBackup(filterID, group, ns, page, pageSize)
+			var entries []domain.ConfigEntry
+			var err error
+			if allPages {
+				entries, err = uc.CollectAllPages(filterID, group, ns, pageSize)
+			} else {
+				entries, err = uc.CollectForBackup(filterID, group, ns, page, pageSize)
+			}
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
@@ -88,12 +106,12 @@ func (a *App) newConfigExportCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required unless --all)")
-	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group")
+	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group (with --all: default all groups)")
 	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id")
 	cmd.Flags().StringVar(&outFile, "out", "", "write one config to this file")
 	cmd.Flags().StringVar(&dir, "dir", "", "write one or more configs under this directory")
-	cmd.Flags().BoolVar(&all, "all", false, "export current list page")
-	cmd.Flags().IntVar(&page, "page", 1, "pageNo when --all")
+	cmd.Flags().BoolVar(&all, "all", false, "export all pages / all groups")
+	cmd.Flags().IntVar(&page, "page", 1, "only this pageNo when --all (default: all pages)")
 	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize when --all")
 	mark(cmd, risk.Read, "Export config(s) to local file/dir")
 	return cmd

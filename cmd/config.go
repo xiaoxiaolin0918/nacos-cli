@@ -11,7 +11,7 @@ import (
 )
 
 func (a *App) newConfigCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "config", Short: "Config center: get/list/publish/history/rollback/export", RunE: helpOnly}
+	cmd := &cobra.Command{Use: "config", Short: "Config center: get/list/publish/history/rollback/export/delete", RunE: helpOnly}
 	cmd.AddCommand(
 		a.newConfigGetCmd(),
 		a.newConfigListCmd(),
@@ -19,6 +19,7 @@ func (a *App) newConfigCmd() *cobra.Command {
 		a.newConfigHistoryCmd(),
 		a.newConfigRollbackCmd(),
 		a.newConfigExportCmd(),
+		a.newConfigDeleteCmd(),
 	)
 	return cmd
 }
@@ -57,15 +58,15 @@ func (a *App) newConfigListCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.List(dataID, group, ns, page, pageSize)
+			out, err := uc.List(domain.BlurPattern(dataID), domain.BlurPattern(group), ns, page, pageSize)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
 			return a.ok(cmd, out)
 		},
 	}
-	cmd.Flags().StringVar(&dataID, "data-id", "", "blur dataId filter (may be empty)")
-	cmd.Flags().StringVar(&group, "group", "", "blur group filter")
+	cmd.Flags().StringVar(&dataID, "data-id", "", "blur dataId filter (auto-wrapped as *x* unless it contains *)")
+	cmd.Flags().StringVar(&group, "group", "", "blur group filter (auto-wrapped as *x* unless it contains *)")
 	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id")
 	cmd.Flags().IntVar(&page, "page", 1, "pageNo")
 	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize")
@@ -77,7 +78,7 @@ func (a *App) newConfigPublishCmd() *cobra.Command {
 	var dataID, group, ns, typ, content, file string
 	var overwrite, createOnly bool
 	cmd := &cobra.Command{
-		Use: "publish",
+		Use:  "publish",
 		Long: "Publish a config. Default is create-only (refuse if dataId exists).\nUse --overwrite to update an existing config. --create-only is an affirmative alias of the default.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if overwrite && createOnly {
@@ -190,6 +191,38 @@ func (a *App) newConfigRollbackCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("data-id")
 	_ = cmd.MarkFlagRequired("nid")
 	mark(cmd, risk.High, "Rollback config to a history nid")
+	return cmd
+}
+
+func (a *App) newConfigDeleteCmd() *cobra.Command {
+	var dataID, group, ns string
+	cmd := &cobra.Command{
+		Use:  "delete",
+		Long: "Delete one existing config (refuses when it does not exist). Back up first: nacos backup create --data-id <id>.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			would := map[string]any{
+				"action": "config.delete", "data_id": dataID, "group": group, "namespace": ns,
+			}
+			stop, err := a.gateHigh(cmd, "config.delete", would)
+			if stop || err != nil {
+				return err
+			}
+			if err := a.requireServer(cmd); err != nil {
+				return err
+			}
+			uc := domain.ConfigUseCase{Port: a.client}
+			out, err := uc.Delete(dataID, group, ns)
+			if err != nil {
+				return a.fail(cmd, risk.High, err)
+			}
+			return a.ok(cmd, out)
+		},
+	}
+	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required)")
+	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group")
+	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id")
+	_ = cmd.MarkFlagRequired("data-id")
+	mark(cmd, risk.High, "Delete one config")
 	return cmd
 }
 

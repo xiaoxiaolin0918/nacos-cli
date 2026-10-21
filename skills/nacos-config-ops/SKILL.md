@@ -1,7 +1,7 @@
 ---
 name: nacos-config-ops
 version: 0.2.0
-description: "Nacos config ops: config get/list/publish/history/rollback/export. publish defaults to create-only; overwrite needs --overwrite. Risk: read | write (publish/rollback need --yes or --dry-run)."
+description: "Nacos config ops: config get/list/publish/history/rollback/export/delete. publish defaults to create-only; overwrite needs --overwrite. Risk: read | write (publish/rollback/delete need --yes or --dry-run)."
 metadata:
   requires:
     bins: ["nacos", "go"]
@@ -33,7 +33,8 @@ Read [`../nacos-shared/SKILL.md`](../nacos-shared/SKILL.md) first.
 | `config list` | read | blur search; empty dataId ok |
 | `config publish` | write | needs `--yes` or `--dry-run`; **default create-only**; `--overwrite` to update |
 | `config history` | read | for rollback nid |
-| `config rollback` | write | needs `--nid` + `--yes` or `--dry-run` |
+| `config rollback` | write | needs `--nid` + `--yes` or `--dry-run`; keeps current type |
+| `config delete` | write | only existing dataId; back up first; `--yes` or `--dry-run` |
 
 ```bash
 nacos config list --namespace zhiyi-debug

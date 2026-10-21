@@ -32,7 +32,7 @@ func (a *App) newUserListCmd() *cobra.Command {
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
-			return a.ok(cmd, out)
+			return a.ok(cmd, domain.RedactUserPasswords(out))
 		},
 	}
 	cmd.Flags().StringVar(&username, "username", "", "blur username filter")

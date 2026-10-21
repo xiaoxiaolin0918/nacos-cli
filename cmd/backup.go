@@ -67,7 +67,8 @@ func (a *App) newBackupCreateCmd() *cobra.Command {
 		Long: `Snapshot configs from Nacos into backups/<stamp>/ (gitignored).
 
 Reads Open API only; writes local files. Use --dry-run to preview without writing.
---all exports the current list page (default page-size 100). Without --all, --data-id is required.`,
+--all snapshots every page across all groups of one namespace (narrow with --group / --page).
+Without --all, --data-id is required. Same-second runs get a -2, -3 suffix (never merged).`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := domain.ValidateExportArgs(dataID, all); err != nil {
 				return a.fail(cmd, risk.Read, err)
@@ -75,12 +76,22 @@ Reads Open API only; writes local files. Use --dry-run to preview without writin
 			filterID := dataID
 			if all {
 				filterID = ""
+				if !cmd.Flags().Changed("group") {
+					group = ""
+				}
 			}
+			allPages := all && !cmd.Flags().Changed("page")
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
 			uc := domain.ConfigUseCase{Port: a.client}
-			entries, err := uc.CollectForBackup(filterID, group, ns, page, pageSize)
+			var entries []domain.ConfigEntry
+			var err error
+			if allPages {
+				entries, err = uc.CollectAllPages(filterID, group, ns, pageSize)
+			} else {
+				entries, err = uc.CollectForBackup(filterID, group, ns, page, pageSize)
+			}
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
@@ -96,6 +107,7 @@ Reads Open API only; writes local files. Use --dry-run to preview without writin
 				"page":      page,
 				"page_size": pageSize,
 				"all":       all,
+				"all_pages": allPages,
 				"count":     len(entries),
 				"items":     names,
 			}
@@ -146,10 +158,10 @@ Reads Open API only; writes local files. Use --dry-run to preview without writin
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required unless --all)")
-	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group filter")
+	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group filter (with --all: default all groups)")
 	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id")
-	cmd.Flags().BoolVar(&all, "all", false, "backup current list page (blur empty dataId)")
-	cmd.Flags().IntVar(&page, "page", 1, "pageNo when listing")
+	cmd.Flags().BoolVar(&all, "all", false, "backup all pages / all groups of the namespace")
+	cmd.Flags().IntVar(&page, "page", 1, "only this pageNo with --all (default: all pages)")
 	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize when listing")
 	mark(cmd, risk.Read, "Create a local config backup snapshot")
 	return cmd

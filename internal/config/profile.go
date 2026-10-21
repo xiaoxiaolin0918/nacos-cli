@@ -168,11 +168,11 @@ func ListProfilesIn(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
+			return []string{}, nil
 		}
 		return nil, err
 	}
-	var names []string
+	names := []string{}
 	for _, e := range entries {
 		if e.IsDir() {
 			continue

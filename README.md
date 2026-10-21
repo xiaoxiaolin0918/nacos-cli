@@ -70,7 +70,8 @@ Writes need **`--dry-run`** (preview) or **`--yes`/`-y`** (execute). Missing gat
 | Write | Default |
 |-------|---------|
 | `config publish` | **create-only**; overwrite needs `--overwrite` |
-| `config rollback` | needs `--nid` |
+| `config rollback` | needs `--nid`; keeps current config type; refuses a nid of another dataId |
+| `config delete` | refuses when the dataId does not exist; back up first |
 | `service register` | ephemeral; persistent needs `--persistent` |
 | `service deregister` / `up` / `down` | ephemeral flag must match register |
 | ACL user/role/permission writes | same `--yes` / `--dry-run` |
@@ -81,12 +82,14 @@ Writes need **`--dry-run`** (preview) or **`--yes`/`-y`** (execute). Missing gat
 
 ```powershell
 .\nacos.ps1 config get --data-id app.yaml --group DEFAULT_GROUP
-.\nacos.ps1 config list --data-id "" --group DEFAULT_GROUP
+.\nacos.ps1 config list --data-id app          # blur: auto-wrapped as *app*
 .\nacos.ps1 config publish --data-id nacos-cli-smoke.yaml --group DEFAULT_GROUP --content "k: v" --dry-run
 .\nacos.ps1 config publish --data-id nacos-cli-smoke.yaml --group DEFAULT_GROUP --content "k: v" --yes
 .\nacos.ps1 config publish --data-id app.yaml --group DEFAULT_GROUP --file .\app.yaml --overwrite --dry-run
 .\nacos.ps1 config history --data-id app.yaml --group DEFAULT_GROUP
 .\nacos.ps1 config rollback --data-id app.yaml --group DEFAULT_GROUP --nid <historyId> --dry-run
+.\nacos.ps1 config delete --data-id nacos-cli-smoke.yaml --dry-run
+.\nacos.ps1 config delete --data-id nacos-cli-smoke.yaml --yes
 ```
 
 ### Service instances
@@ -137,12 +140,18 @@ Read-only against Nacos; writes local files only (`backups/` is gitignored).
 
 ```powershell
 .\nacos.exe config export --data-id app.yaml --group DEFAULT_GROUP --out .\out\app.yaml
-.\nacos.exe config export --all --group DEFAULT_GROUP --dir .\export-out --page-size 100
+.\nacos.exe config export --all --dir .\export-out                 # all pages, all groups
+.\nacos.exe config export --data-id app.yaml --out .\x.yaml --dry-run   # writes nothing
 .\nacos.exe backup path
 .\nacos.exe backup list
 .\nacos.exe backup create --data-id app.yaml --group DEFAULT_GROUP --dry-run
-.\nacos.exe backup create --all --group DEFAULT_GROUP
+.\nacos.exe backup create --all                                   # one namespace, all groups, all pages
+.\nacos.exe backup create --all --namespace zhiyi-debug
 ```
+
+`--all` defaults to **all groups and all pages** (narrow with `--group` / `--page`). Same-second backups get a `-2` suffix instead of merging.
+
+> **PowerShell 5 gotcha:** `--group ""` is dropped by Windows PowerShell, so the next flag becomes the value. Use `--group=` (or omit the flag) for an empty value.
 
 ### Interactive REPL (P2)
 

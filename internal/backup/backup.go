@@ -15,11 +15,11 @@ import (
 
 // Item is one exported config file in a backup.
 type Item struct {
-	DataID   string `json:"data_id"`
-	Group    string `json:"group"`
+	DataID    string `json:"data_id"`
+	Group     string `json:"group"`
 	Namespace string `json:"namespace,omitempty"`
-	RelPath  string `json:"rel_path"`
-	Bytes    int    `json:"bytes"`
+	RelPath   string `json:"rel_path"`
+	Bytes     int    `json:"bytes"`
 }
 
 // Manifest describes a backup directory.
@@ -81,9 +81,19 @@ func CreateDir(root, stamp string) (string, error) {
 	if strings.TrimSpace(stamp) == "" {
 		return "", errors.New("stamp is required")
 	}
-	dir := filepath.Join(root, stamp)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o755); err != nil {
 		return "", err
+	}
+	dir := filepath.Join(root, stamp)
+	for i := 2; ; i++ {
+		err := os.Mkdir(dir, 0o755)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, os.ErrExist) || i > 1000 {
+			return "", err
+		}
+		dir = filepath.Join(root, fmt.Sprintf("%s-%d", stamp, i))
 	}
 	abs, err := filepath.Abs(dir)
 	if err != nil {

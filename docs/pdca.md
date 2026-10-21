@@ -84,3 +84,17 @@ Do **not** wholesale rewrite our command surface. Pick high-value gaps.
 | skip-for-now | RBAC ACL in official | Official docs lack user/role/permission CLI — our ACL differentiates |
 
 Act when borrowed: add failing tests first; keep Risk gates; update skills + pdca Check.
+
+## Cycle 2026-10-21 (live smoke v0.3.0 → v0.3.1)
+
+### Plan
+Approved smoke vs lab 2.4.3 (auth disabled): backup first; write only `nacos-cli-smoke-*`; `--dry-run` before `--yes`; clean up.
+
+### Do
+Ran 7 areas (doctor/auth/profile, read+backup, config lifecycle, service lifecycle, ACL lifecycle, REPL via stdin, output formats). Fixed bugs via TDD.
+
+### Check
+All areas pass on v0.3.1; `go test ./...` green. Record: [`smoke-20261021.md`](smoke-20261021.md).
+
+### Act
+Bugs fixed: export `--dry-run` wrote files; rollback reset type to text (+ no dataId check); `user list` leaked bcrypt hashes; backup/export `--all` only DEFAULT_GROUP + one page; same-second backups merged; `profile list` null; `config list` blur needed `*`. Added `config delete`. Open items in HANDOFF.

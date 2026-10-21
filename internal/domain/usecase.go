@@ -83,6 +83,16 @@ func (uc ConfigUseCase) History(dataID, group, namespace string, pageNo, pageSiz
 	return uc.Port.ConfigHistory(dataID, group, namespace, pageNo, pageSize)
 }
 
+// ConfigTypeGetter is an optional port: lets rollback keep the current config type.
+type ConfigTypeGetter interface {
+	ConfigType(dataID, group, namespace string) (string, error)
+}
+
+// ConfigDeleter is an optional port for removing a config.
+type ConfigDeleter interface {
+	ConfigDelete(dataID, group, namespace string) (any, error)
+}
+
 func (uc ConfigUseCase) Rollback(dataID, group, namespace, nid string) (any, error) {
 	if strings.TrimSpace(dataID) == "" {
 		return nil, errors.New("data_id is required")
@@ -97,6 +107,12 @@ func (uc ConfigUseCase) Rollback(dataID, group, namespace, nid string) (any, err
 	if err != nil {
 		return nil, err
 	}
+	if hid, ok := detail["dataId"].(string); ok && hid != "" && hid != dataID {
+		return nil, fmt.Errorf("history nid=%s belongs to dataId=%s, not %s", nid, hid, dataID)
+	}
+	if hg, ok := detail["group"].(string); ok && hg != "" && hg != group {
+		return nil, fmt.Errorf("history nid=%s belongs to group=%s, not %s", nid, hg, group)
+	}
 	content, _ := detail["content"].(string)
 	if content == "" {
 		if v, ok := detail["contentData"].(string); ok {
@@ -106,7 +122,43 @@ func (uc ConfigUseCase) Rollback(dataID, group, namespace, nid string) (any, err
 	if content == "" {
 		return nil, fmt.Errorf("history nid=%s has no content", nid)
 	}
-	return uc.Port.ConfigPublish(dataID, group, content, namespace, "text")
+	typ := "text"
+	if tg, ok := uc.Port.(ConfigTypeGetter); ok {
+		if t, err := tg.ConfigType(dataID, group, namespace); err == nil && strings.TrimSpace(t) != "" {
+			typ = t
+		}
+	}
+	return uc.Port.ConfigPublish(dataID, group, content, namespace, typ)
+}
+
+// Delete removes an existing config; refuses when it does not exist.
+func (uc ConfigUseCase) Delete(dataID, group, namespace string) (any, error) {
+	if strings.TrimSpace(dataID) == "" {
+		return nil, errors.New("data_id is required")
+	}
+	if group == "" {
+		group = "DEFAULT_GROUP"
+	}
+	del, ok := uc.Port.(ConfigDeleter)
+	if !ok {
+		return nil, errors.New("config delete not supported by this port")
+	}
+	exists, err := uc.exists(dataID, group, namespace)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, fmt.Errorf("%w: dataId=%s group=%s namespace=%s", ErrNotFound, dataID, group, namespace)
+	}
+	return del.ConfigDelete(dataID, group, namespace)
+}
+
+// BlurPattern wraps a non-empty filter with * (Nacos blur search does not add wildcards itself).
+func BlurPattern(s string) string {
+	if s == "" || strings.Contains(s, "*") {
+		return s
+	}
+	return "*" + s + "*"
 }
 
 func (uc ConfigUseCase) exists(dataID, group, namespace string) (bool, error) {

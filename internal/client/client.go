@@ -237,6 +237,46 @@ func (c *Client) ConfigPublish(dataID, group, content, namespace, typ string) (a
 	return strings.TrimSpace(string(b)), nil
 }
 
+// ConfigType returns the stored config type (show=all), "" when unknown.
+func (c *Client) ConfigType(dataID, group, namespace string) (string, error) {
+	q := url.Values{}
+	q.Set("dataId", dataID)
+	q.Set("group", group)
+	q.Set("tenant", c.ns(namespace))
+	q.Set("show", "all")
+	v, err := c.getJSON(context.Background(), "/v1/cs/configs", q)
+	if err != nil {
+		return "", err
+	}
+	if m, ok := v.(map[string]any); ok {
+		if t, ok := m["type"].(string); ok {
+			return t, nil
+		}
+	}
+	return "", nil
+}
+
+// ConfigDelete removes one config (DELETE /v1/cs/configs).
+func (c *Client) ConfigDelete(dataID, group, namespace string) (any, error) {
+	q := url.Values{}
+	q.Set("dataId", dataID)
+	q.Set("group", group)
+	q.Set("tenant", c.ns(namespace))
+	b, status, _, err := c.do(context.Background(), http.MethodDelete, "/v1/cs/configs", q, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("HTTP %d: %s", status, truncate(string(b), 200))
+	}
+	if json.Valid(b) {
+		var v any
+		_ = json.Unmarshal(b, &v)
+		return v, nil
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
 func (c *Client) ConfigHistory(dataID, group, namespace string, pageNo, pageSize int) (any, error) {
 	q := url.Values{}
 	q.Set("search", "accurate")

@@ -39,3 +39,26 @@ func TestConfigGetNotFound(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestConfigTypeAndDelete(t *testing.T) {
+	var gotMethod, gotShow string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotShow = r.URL.Query().Get("show")
+		if r.Method == http.MethodDelete {
+			_, _ = w.Write([]byte("true"))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"dataId": "a.yaml", "type": "yaml"})
+	}))
+	defer srv.Close()
+	c := New(config.Settings{Server: srv.URL, ContextPath: "/nacos"})
+	typ, err := c.ConfigType("a.yaml", "DEFAULT_GROUP", "")
+	if err != nil || typ != "yaml" || gotShow != "all" {
+		t.Fatalf("%q %v show=%q", typ, err, gotShow)
+	}
+	out, err := c.ConfigDelete("a.yaml", "DEFAULT_GROUP", "")
+	if err != nil || gotMethod != http.MethodDelete || out != true {
+		t.Fatalf("%v %v %s", out, err, gotMethod)
+	}
+}

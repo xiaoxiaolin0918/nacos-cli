@@ -2,7 +2,9 @@
 
 ## Status
 
-Go mainline **v0.3.0**: ACL + multi-profile + `--output` + **REPL** + **config export** + **backup** + GitHub Actions CI.
+Go mainline **v0.3.1**: ACL + multi-profile + `--output` + **REPL** + **config export/delete** + **backup** + GitHub Actions CI.
+
+**Live smoke 2026-10-21** against lab `192.168.100.41:8848` (Nacos 2.4.3, auth disabled): all 7 areas pass after fixes — see [`docs/smoke-20261021.md`](docs/smoke-20261021.md).
 
 Python v0 in `archive/python-v0`. `backups/` gitignored.
 
@@ -23,7 +25,7 @@ make build   # or: go build -o nacos.exe .
 
 ## Commands
 
-config (+ export) / service / namespace / user / role / permission / auth / doctor / whoami / profile / skills / **backup** / **repl**
+config (+ export / delete) / service / namespace / user / role / permission / auth / doctor / whoami / profile / skills / **backup** / **repl**
 
 Gates: `--dry-run` / `--yes` (exit 10). ACL + profile show never print password values.
 
@@ -32,7 +34,7 @@ Gates: `--dry-run` / `--yes` (exit 10). ACL + profile show never print password 
 ```powershell
 .\nacos.exe repl
 .\nacos.exe config export --data-id app.yaml --out .\app.yaml
-.\nacos.exe backup create --all --group DEFAULT_GROUP --dry-run
+.\nacos.exe backup create --all --dry-run   # all groups + all pages of one namespace
 .\nacos.exe backup list
 ```
 
@@ -53,7 +55,12 @@ Ops surface + gates + profile + REPL + export/backup + CI is enough for daily la
 
 ## Remaining optional
 
-- Auth-enabled lab ACL smoke (needs user approval)
+- Auth-enabled lab ACL smoke (needs user approval; 2026-10-21 smoke ran with auth disabled)
+- `service delete` for empty services (Nacos auto-cleans empty ephemeral services ~1 min)
+- `service instances` hides disabled instances (v1 list API); add catalog view if needed
+- `user create --password` is a flag (visible in process list); consider `--password-stdin`
+- Doctor `reachable` shows `HTTP 404` for the root probe (cosmetic)
+- Pre-existing smoke leftover: `zhiyi-debug / DEFAULT_GROUP / nacos-cli-smoke-20261020-214546.yaml` (from 2026-10-20, marked 可删) — not removed without approval
 - Multi-arch Releases / installers
 - Full v3 Bearer client adapter
 - AgentSpec lifecycle (only if Nacos AI registry deployed)

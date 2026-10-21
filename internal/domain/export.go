@@ -101,6 +101,63 @@ func (uc ConfigUseCase) CollectForBackup(dataID, group, namespace string, page, 
 	return entries, nil
 }
 
+// CollectAllPages walks every list page (blur filters) and fills content.
+func (uc ConfigUseCase) CollectAllPages(dataID, group, namespace string, pageSize int) ([]ConfigEntry, error) {
+	if pageSize <= 0 {
+		pageSize = 100
+	}
+	var out []ConfigEntry
+	for page := 1; page <= 10000; page++ {
+		raw, err := uc.List(dataID, group, namespace, page, pageSize)
+		if err != nil {
+			return nil, err
+		}
+		entries := ParseConfigPage(raw)
+		for i := range entries {
+			entries[i].Namespace = namespace
+			if entries[i].Content == "" {
+				body, err := uc.Get(entries[i].DataID, entries[i].Group, namespace)
+				if err != nil {
+					return nil, fmt.Errorf("get %s/%s: %w", entries[i].Group, entries[i].DataID, err)
+				}
+				entries[i].Content = body
+			}
+		}
+		out = append(out, entries...)
+		pages := 0
+		if m, ok := raw.(map[string]any); ok {
+			if v, ok := m["pagesAvailable"].(float64); ok {
+				pages = int(v)
+			}
+		}
+		if len(entries) == 0 || page >= pages {
+			break
+		}
+	}
+	if out == nil {
+		out = []ConfigEntry{}
+	}
+	return out, nil
+}
+
+// RedactUserPasswords drops password hashes from a Nacos user list payload.
+func RedactUserPasswords(raw any) any {
+	m, ok := raw.(map[string]any)
+	if !ok {
+		return raw
+	}
+	items, ok := m["pageItems"].([]any)
+	if !ok {
+		return raw
+	}
+	for _, it := range items {
+		if row, ok := it.(map[string]any); ok {
+			delete(row, "password")
+		}
+	}
+	return m
+}
+
 // ValidateExportArgs requires data-id or --all semantics (empty dataID filter means all blur).
 func ValidateExportArgs(dataID string, all bool) error {
 	if all {
