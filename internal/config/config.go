@@ -75,7 +75,7 @@ func FromEnv() Settings {
 		Server:      strings.TrimSpace(os.Getenv("NACOS_SERVER")),
 		Username:    user,
 		Password:    os.Getenv("NACOS_PASSWORD"),
-		Namespace:   strings.TrimSpace(os.Getenv("NACOS_NAMESPACE")),
+		Namespace:   NormalizeNamespaceID(os.Getenv("NACOS_NAMESPACE")),
 		ContextPath: ctx,
 	}
 }

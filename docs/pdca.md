@@ -1,4 +1,21 @@
-# PDCA — nacos-cli
+## Cycle 2026-10-24 (Issues #1 #2 #3)
+
+### Plan
+Fix inconsistent `public` namespace, config publish type inference, and Git Bash mangled context-path. TDD; local checkout.
+
+### Do
+- domain: NormalizeNamespace / EffectiveNamespace; InferConfigTypeFromDataID / ResolvePublishType
+- client.ns uses EffectiveNamespace; config MergeSettings/FromEnv normalize public
+- config publish: infer type, require --type when unknown, --change-type on type change; dry-run shows effective_namespace
+- profile set: ValidateContextPath rejects MSYS paths; store public as empty; flag help mentions MSYS_NO_PATHCONV=1
+
+### Check
+go test ./...
+
+### Act
+Fixes #1 #2 #3
+
+# PDCA 鈥?nacos-cli
 
 ## Cycle 2026-10-21 (P2 REPL + export/backup + CI)
 
@@ -13,7 +30,7 @@ Land unfinished P2 work: interactive REPL, config export, local backup, GitHub A
 - Docs: README / AGENTS / HANDOFF / wiki / pdca / skills shared+config
 
 ### Check
-`go test ./...` green; `nacos --version` → 0.3.0; help lists backup/repl/export.
+`go test ./...` green; `nacos --version` 鈫?0.3.0; help lists backup/repl/export.
 
 ### Act
 P2 REPL/export/backup/CI closed. Remaining optional: Releases, v3 adapter, AgentSpec, auth-enabled ACL smoke with approval.
@@ -74,18 +91,18 @@ Do **not** wholesale rewrite our command surface. Pick high-value gaps.
 
 | Priority | Item | Status / notes |
 |----------|------|----------------|
-| P1 | --output json / pretty (or keep --format) | **Done 2026-10-21** — `--output` aliases `--format`; default stays `json` |
-| P1 | Profile (~/.nacos-cli/*.conf, profile show/set, --profile) | **Done 2026-10-21** — list/show/path/set/delete; `--config` overrides |
-| P2 | Interactive terminal (nacos> REPL) | **Done 2026-10-21** — `nacos repl` / bare TTY; gates per line |
+| P1 | --output json / pretty (or keep --format) | **Done 2026-10-21** 鈥?`--output` aliases `--format`; default stays `json` |
+| P1 | Profile (~/.nacos-cli/*.conf, profile show/set, --profile) | **Done 2026-10-21** 鈥?list/show/path/set/delete; `--config` overrides |
+| P2 | Interactive terminal (nacos> REPL) | **Done 2026-10-21** 鈥?`nacos repl` / bare TTY; gates per line |
 | P2 | Server version detect (v1 vs v3 API / Bearer) | Lab is 2.4.x (v1); design behind client adapter |
 | P3 | AI Skill / AgentSpec lifecycle | Only if our Nacos deploys AI registry |
 | P3 | Installer / npm / multi-arch Releases | Match plumelog when we cut v0.1 |
 | skip-for-now | Naming up/down in official | We already cover register/up/down |
-| skip-for-now | RBAC ACL in official | Official docs lack user/role/permission CLI — our ACL differentiates |
+| skip-for-now | RBAC ACL in official | Official docs lack user/role/permission CLI 鈥?our ACL differentiates |
 
 Act when borrowed: add failing tests first; keep Risk gates; update skills + pdca Check.
 
-## Cycle 2026-10-21 (live smoke v0.3.0 → v0.3.1)
+## Cycle 2026-10-21 (live smoke v0.3.0 鈫?v0.3.1)
 
 ### Plan
 Approved smoke vs lab 2.4.3 (auth disabled): backup first; write only `nacos-cli-smoke-*`; `--dry-run` before `--yes`; clean up.

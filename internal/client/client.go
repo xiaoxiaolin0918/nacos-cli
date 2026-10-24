@@ -38,10 +38,7 @@ func (c *Client) base() string {
 }
 
 func (c *Client) ns(explicit string) string {
-	if explicit != "" {
-		return explicit
-	}
-	return c.Settings.Namespace
+	return domain.EffectiveNamespace(explicit, c.Settings.Namespace)
 }
 
 type LoginResult struct {

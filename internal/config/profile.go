@@ -225,7 +225,7 @@ func MergeSettings(base Settings, p Profile) Settings {
 		out.Password = p.Password
 	}
 	if strings.TrimSpace(p.Namespace) != "" {
-		out.Namespace = strings.TrimSpace(p.Namespace)
+		out.Namespace = NormalizeNamespaceID(p.Namespace)
 	}
 	if strings.TrimSpace(p.ContextPath) != "" {
 		out.ContextPath = strings.TrimSpace(p.ContextPath)

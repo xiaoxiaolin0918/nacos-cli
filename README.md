@@ -27,8 +27,8 @@ Or use a **profile** (official layout `~/.nacos-cli/<name>.conf`):
 |--------|------|
 | flags | `--server` / `--username` / `--namespace` / `--profile` / `--config` |
 | `--config` | explicit YAML file (overrides `--profile`) |
-| `--profile` | default `default` → `~/.nacos-cli/default.conf` |
-| env / `.env` | `NACOS_SERVER`, `NACOS_USERNAME`, `NACOS_PASSWORD`, … |
+| `--profile` | default `default` 鈫?`~/.nacos-cli/default.conf` |
+| env / `.env` | `NACOS_SERVER`, `NACOS_USERNAME`, `NACOS_PASSWORD`, 鈥?|
 | defaults | context `/nacos` |
 
 **Never commit** `.env`, profile passwords, tokens, or `backups/`.
@@ -65,7 +65,7 @@ Agent-friendly JSON envelope by default (unlike official CLI which defaults to p
 
 ## High-risk write gates
 
-Writes need **`--dry-run`** (preview) or **`--yes`/`-y`** (execute). Missing gate → exit **10**.
+Writes need **`--dry-run`** (preview) or **`--yes`/`-y`** (execute). Missing gate 鈫?exit **10**.
 
 | Write | Default |
 |-------|---------|
@@ -177,3 +177,11 @@ High-risk writes still need `--dry-run` or `--yes` on each line.
 
 Upstream [`nacos-group/nacos-cli`](https://github.com/nacos-group/nacos-cli) focuses on Skill/AgentSpec + config.  
 This ops CLI differentiates with naming up/down, ACL, `--yes`/`--dry-run` gates, and web login.
+
+## Windows / Git Bash notes
+
+- Built-in public namespace ID is empty string ""; display name public is normalized to "" (avoids phantom tenants).
+- config publish infers --type from dataId extension (.yaml/.yml/.json/.properties/.toml); unknown extensions require explicit --type. Overwriting with a different type needs --change-type.
+- Under Git Bash, path conversion may rewrite --context-path /nacos. Use:
+  `MSYS_NO_PATHCONV=1 nacos profile set lab --context-path /nacos`
+  Invalid filesystem-looking values are rejected at profile write time.

@@ -165,9 +165,12 @@ func (a *App) newProfileSetCmd() *cobra.Command {
 				p.Password = password
 			}
 			if changed(cmd, "namespace") {
-				p.Namespace = strings.TrimSpace(a.flagNS)
+				p.Namespace = config.NormalizeNamespaceID(a.flagNS)
 			}
 			if cmd.Flags().Changed("context-path") {
+				if err := config.ValidateContextPath(contextPath); err != nil {
+					return a.fail(cmd, risk.Write, err)
+				}
 				p.ContextPath = strings.TrimSpace(contextPath)
 			}
 			if cmd.Flags().Changed("default-format") {
@@ -198,7 +201,7 @@ func (a *App) newProfileSetCmd() *cobra.Command {
 	cmd.Flags().StringVar(&host, "host", "", "host (official-style; composed with --port into server)")
 	cmd.Flags().IntVar(&port, "port", 8848, "port used with --host")
 	cmd.Flags().StringVar(&password, "password", "", "optional local password (prefer env)")
-	cmd.Flags().StringVar(&contextPath, "context-path", "", "API context path (default /nacos)")
+	cmd.Flags().StringVar(&contextPath, "context-path", "", "API context path (default /nacos). Under Git Bash use MSYS_NO_PATHCONV=1 so /nacos is not rewritten")
 	cmd.Flags().StringVar(&defaultFormat, "default-format", "", "default output format stored in profile: json|pretty")
 	mark(cmd, risk.Write, "Create or update a local profile file")
 	return cmd
