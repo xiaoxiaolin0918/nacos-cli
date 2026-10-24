@@ -32,6 +32,7 @@ func (uc ConfigUseCase) Get(dataID, group, namespace string) (string, error) {
 	if group == "" {
 		group = "DEFAULT_GROUP"
 	}
+	namespace = NormalizeNamespace(namespace)
 	return uc.Port.ConfigGet(dataID, group, namespace)
 }
 
@@ -42,18 +43,20 @@ func (uc ConfigUseCase) List(dataID, group, namespace string, pageNo, pageSize i
 	if pageSize <= 0 {
 		pageSize = 100
 	}
+	namespace = NormalizeNamespace(namespace)
 	return uc.Port.ConfigList(dataID, group, namespace, pageNo, pageSize)
 }
 
-func (uc ConfigUseCase) Publish(dataID, group, content, namespace, typ string, createOnly bool) (any, error) {
+func (uc ConfigUseCase) Publish(dataID, group, content, namespace, typ string, createOnly, changeType bool) (any, error) {
 	if strings.TrimSpace(dataID) == "" {
 		return nil, errors.New("data_id is required")
 	}
 	if group == "" {
 		group = "DEFAULT_GROUP"
 	}
+	namespace = NormalizeNamespace(namespace)
 	if typ == "" {
-		typ = "text"
+		return nil, errors.New("type is required")
 	}
 	if createOnly {
 		exists, err := uc.exists(dataID, group, namespace)
@@ -62,6 +65,15 @@ func (uc ConfigUseCase) Publish(dataID, group, content, namespace, typ string, c
 		}
 		if exists {
 			return nil, fmt.Errorf("%w: dataId=%s group=%s namespace=%s", ErrExists, dataID, group, namespace)
+		}
+	} else if !changeType {
+		if tg, ok := uc.Port.(ConfigTypeGetter); ok {
+			if existing, err := tg.ConfigType(dataID, group, namespace); err == nil {
+				existing = strings.TrimSpace(existing)
+				if existing != "" && !strings.EqualFold(existing, typ) {
+					return nil, fmt.Errorf("config type would change from %s to %s; pass --change-type to confirm", existing, typ)
+				}
+			}
 		}
 	}
 	return uc.Port.ConfigPublish(dataID, group, content, namespace, typ)
@@ -80,6 +92,7 @@ func (uc ConfigUseCase) History(dataID, group, namespace string, pageNo, pageSiz
 	if pageSize <= 0 {
 		pageSize = 20
 	}
+	namespace = NormalizeNamespace(namespace)
 	return uc.Port.ConfigHistory(dataID, group, namespace, pageNo, pageSize)
 }
 
@@ -103,6 +116,7 @@ func (uc ConfigUseCase) Rollback(dataID, group, namespace, nid string) (any, err
 	if group == "" {
 		group = "DEFAULT_GROUP"
 	}
+	namespace = NormalizeNamespace(namespace)
 	detail, err := uc.Port.ConfigHistoryDetail(dataID, group, namespace, nid)
 	if err != nil {
 		return nil, err
@@ -139,6 +153,7 @@ func (uc ConfigUseCase) Delete(dataID, group, namespace string) (any, error) {
 	if group == "" {
 		group = "DEFAULT_GROUP"
 	}
+	namespace = NormalizeNamespace(namespace)
 	del, ok := uc.Port.(ConfigDeleter)
 	if !ok {
 		return nil, errors.New("config delete not supported by this port")
@@ -209,6 +224,7 @@ func (uc ServiceUseCase) List(namespace string, pageNo, pageSize int) (any, erro
 	if pageSize <= 0 {
 		pageSize = 100
 	}
+	namespace = NormalizeNamespace(namespace)
 	return uc.Port.ServiceList(namespace, pageNo, pageSize)
 }
 
@@ -285,3 +301,4 @@ type NamespaceUseCase struct {
 func (uc NamespaceUseCase) List() (any, error) {
 	return uc.Port.NamespaceList()
 }
+

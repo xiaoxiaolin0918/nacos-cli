@@ -2,11 +2,13 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
 type fakeConfig struct {
 	get     map[string]string
+	types   map[string]string
 	publish []string
 }
 
@@ -25,8 +27,12 @@ func (f *fakeConfig) ConfigList(string, string, string, int, int) (any, error) {
 	return map[string]any{"pageItems": []any{}}, nil
 }
 func (f *fakeConfig) ConfigPublish(dataID, group, content, namespace, typ string) (any, error) {
-	f.publish = append(f.publish, dataID)
+	f.publish = append(f.publish, dataID+"|"+typ+"|"+namespace)
 	f.get[f.key(dataID, group, namespace)] = content
+	if f.types == nil {
+		f.types = map[string]string{}
+	}
+	f.types[f.key(dataID, group, namespace)] = typ
 	return true, nil
 }
 func (f *fakeConfig) ConfigHistory(string, string, string, int, int) (any, error) {
@@ -38,18 +44,54 @@ func (f *fakeConfig) ConfigHistoryDetail(dataID, group, namespace, nid string) (
 	}
 	return nil, ErrNotFound
 }
+func (f *fakeConfig) ConfigType(dataID, group, namespace string) (string, error) {
+	if f.types == nil {
+		return "", nil
+	}
+	return f.types[f.key(dataID, group, namespace)], nil
+}
 
 func TestConfigPublishCreateOnly(t *testing.T) {
 	f := &fakeConfig{get: map[string]string{}}
 	uc := ConfigUseCase{Port: f}
-	if _, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "x", "", "yaml", true); err != nil {
+	if _, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "x", "", "yaml", true, false); err != nil {
 		t.Fatal(err)
 	}
-	_, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "y", "", "yaml", true)
+	_, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "y", "", "yaml", true, false)
 	if !errors.Is(err, ErrExists) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "y", "", "yaml", false); err != nil {
+	if _, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "y", "", "yaml", false, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConfigPublishNormalizesPublicNamespace(t *testing.T) {
+	f := &fakeConfig{get: map[string]string{}}
+	uc := ConfigUseCase{Port: f}
+	if _, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "x", "public", "yaml", true, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.publish) != 1 || f.publish[0] != "a.yaml|yaml|" {
+		t.Fatalf("expected tenant empty after public normalize, got %v", f.publish)
+	}
+	got, err := uc.Get("a.yaml", "DEFAULT_GROUP", "Public")
+	if err != nil || got != "x" {
+		t.Fatalf("%q %v", got, err)
+	}
+}
+
+func TestConfigPublishChangeTypeRequired(t *testing.T) {
+	f := &fakeConfig{
+		get:   map[string]string{"a.yaml|DEFAULT_GROUP|": "body"},
+		types: map[string]string{"a.yaml|DEFAULT_GROUP|": "yaml"},
+	}
+	uc := ConfigUseCase{Port: f}
+	_, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "body2", "", "json", false, false)
+	if err == nil || !strings.Contains(err.Error(), "--change-type") {
+		t.Fatalf("expected change-type error, got %v", err)
+	}
+	if _, err := uc.Publish("a.yaml", "DEFAULT_GROUP", "body2", "", "json", false, true); err != nil {
 		t.Fatal(err)
 	}
 }

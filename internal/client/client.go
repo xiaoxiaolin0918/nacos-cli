@@ -37,11 +37,12 @@ func (c *Client) base() string {
 	return c.Settings.BaseURL()
 }
 
+// ns normalizes a tenant already resolved by the cmd/use-case layer.
+// It must NOT fall back to Settings.Namespace: an empty string after
+// EffectiveNamespace("public", ...) means the built-in public tenant,
+// and re-applying Effective here would collide with a non-empty profile ns.
 func (c *Client) ns(explicit string) string {
-	if explicit != "" {
-		return explicit
-	}
-	return c.Settings.Namespace
+	return domain.NormalizeNamespace(explicit)
 }
 
 type LoginResult struct {

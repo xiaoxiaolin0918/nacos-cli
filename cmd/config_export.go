@@ -44,9 +44,11 @@ Without --all, --data-id is required. --dry-run writes nothing and does not call
 				}
 			}
 			allPages := all && !cmd.Flags().Changed("page")
+			ns = a.effectiveNS(ns)
 			if a.dryRun {
 				return a.write(cmd, output.Envelope{OK: true, DryRun: true, Risk: risk.Read, Would: map[string]any{
 					"action": "config.export", "data_id": filterID, "group": group, "namespace": ns,
+					"effective_namespace": ns,
 					"out": outFile, "dir": dir, "all": all, "all_pages": allPages,
 				}})
 			}

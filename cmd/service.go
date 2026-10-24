@@ -31,8 +31,9 @@ func (a *App) newServiceListCmd() *cobra.Command {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			eff := a.effectiveNS(ns)
 			uc := domain.ServiceUseCase{Port: a.client}
-			out, err := uc.List(ns, page, pageSize)
+			out, err := uc.List(eff, page, pageSize)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
@@ -54,8 +55,9 @@ func (a *App) newServiceInstancesCmd() *cobra.Command {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			eff := a.effectiveNS(ns)
 			uc := domain.ServiceUseCase{Port: a.client}
-			out, err := uc.Instances(service, ns, group)
+			out, err := uc.Instances(service, eff, group)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
@@ -103,9 +105,10 @@ func (a *App) newServiceRegisterCmd() *cobra.Command {
 		Long: "Register an instance. Default ephemeral=true; use --persistent for durable instances.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eph := resolveEphemeral(ephemeral, persistent, cmd)
+			eff := a.effectiveNS(ns)
 			would := map[string]any{
 				"action": "service.register", "service": service, "ip": ip, "port": port,
-				"namespace": ns, "group": group, "cluster": cluster, "ephemeral": eph,
+				"namespace": eff, "effective_namespace": eff, "group": group, "cluster": cluster, "ephemeral": eph,
 			}
 			stop, err := a.gateHigh(cmd, "service.register", would)
 			if stop || err != nil {
@@ -115,7 +118,7 @@ func (a *App) newServiceRegisterCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ServiceUseCase{Port: a.client}
-			out, err := uc.Register(service, ip, port, ns, group, cluster, eph)
+			out, err := uc.Register(service, ip, port, eff, group, cluster, eph)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}
@@ -135,9 +138,10 @@ func (a *App) newServiceDeregisterCmd() *cobra.Command {
 		Use: "deregister",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eph := resolveEphemeral(ephemeral, persistent, cmd)
+			eff := a.effectiveNS(ns)
 			would := map[string]any{
 				"action": "service.deregister", "service": service, "ip": ip, "port": port,
-				"namespace": ns, "group": group, "cluster": cluster, "ephemeral": eph,
+				"namespace": eff, "effective_namespace": eff, "group": group, "cluster": cluster, "ephemeral": eph,
 			}
 			stop, err := a.gateHigh(cmd, "service.deregister", would)
 			if stop || err != nil {
@@ -147,7 +151,7 @@ func (a *App) newServiceDeregisterCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ServiceUseCase{Port: a.client}
-			out, err := uc.Deregister(service, ip, port, ns, group, cluster, eph)
+			out, err := uc.Deregister(service, ip, port, eff, group, cluster, eph)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}
@@ -167,9 +171,10 @@ func (a *App) newServiceUpCmd() *cobra.Command {
 		Use: "up",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eph := resolveEphemeral(ephemeral, persistent, cmd)
+			eff := a.effectiveNS(ns)
 			would := map[string]any{
 				"action": "service.up", "service": service, "ip": ip, "port": port,
-				"namespace": ns, "group": group, "cluster": cluster, "ephemeral": eph,
+				"namespace": eff, "effective_namespace": eff, "group": group, "cluster": cluster, "ephemeral": eph,
 			}
 			stop, err := a.gateHigh(cmd, "service.up", would)
 			if stop || err != nil {
@@ -179,7 +184,7 @@ func (a *App) newServiceUpCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ServiceUseCase{Port: a.client}
-			out, err := uc.Up(service, ip, port, ns, group, cluster, eph)
+			out, err := uc.Up(service, ip, port, eff, group, cluster, eph)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}
@@ -199,9 +204,10 @@ func (a *App) newServiceDownCmd() *cobra.Command {
 		Use: "down",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			eph := resolveEphemeral(ephemeral, persistent, cmd)
+			eff := a.effectiveNS(ns)
 			would := map[string]any{
 				"action": "service.down", "service": service, "ip": ip, "port": port,
-				"namespace": ns, "group": group, "cluster": cluster, "ephemeral": eph,
+				"namespace": eff, "effective_namespace": eff, "group": group, "cluster": cluster, "ephemeral": eph,
 			}
 			stop, err := a.gateHigh(cmd, "service.down", would)
 			if stop || err != nil {
@@ -211,7 +217,7 @@ func (a *App) newServiceDownCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ServiceUseCase{Port: a.client}
-			out, err := uc.Down(service, ip, port, ns, group, cluster, eph)
+			out, err := uc.Down(service, ip, port, eff, group, cluster, eph)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}

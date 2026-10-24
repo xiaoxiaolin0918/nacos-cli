@@ -201,7 +201,7 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 		s.Username = a.flagUsername
 	}
 	if changed(cmd, "namespace") {
-		s.Namespace = a.flagNS
+		s.Namespace = config.NormalizeNamespaceID(a.flagNS)
 	}
 	a.settings = s
 

@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -24,6 +25,10 @@ func (a *App) newConfigCmd() *cobra.Command {
 	return cmd
 }
 
+func (a *App) effectiveNS(explicit string) string {
+	return domain.EffectiveNamespace(explicit, a.settings.Namespace)
+}
+
 func (a *App) newConfigGetCmd() *cobra.Command {
 	var dataID, group, ns string
 	cmd := &cobra.Command{
@@ -32,17 +37,24 @@ func (a *App) newConfigGetCmd() *cobra.Command {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			eff := a.effectiveNS(ns)
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.Get(dataID, group, ns)
+			out, err := uc.Get(dataID, group, eff)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
-			return a.ok(cmd, map[string]any{"data_id": dataID, "group": group, "content": out})
+			return a.ok(cmd, map[string]any{
+				"data_id":             dataID,
+				"group":               group,
+				"namespace":           eff,
+				"effective_namespace": eff,
+				"content":             out,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required)")
 	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group")
-	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id (overrides default)")
+	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id (overrides default; display name public maps to built-in empty id)")
 	_ = cmd.MarkFlagRequired("data-id")
 	mark(cmd, risk.Read, "Get one config")
 	return cmd
@@ -57,12 +69,18 @@ func (a *App) newConfigListCmd() *cobra.Command {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			eff := a.effectiveNS(ns)
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.List(domain.BlurPattern(dataID), domain.BlurPattern(group), ns, page, pageSize)
+			out, err := uc.List(domain.BlurPattern(dataID), domain.BlurPattern(group), eff, page, pageSize)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
-			return a.ok(cmd, out)
+			if m, ok := out.(map[string]any); ok {
+					m["namespace"] = eff
+					m["effective_namespace"] = eff
+					return a.ok(cmd, m)
+				}
+				return a.ok(cmd, map[string]any{"result": out, "namespace": eff, "effective_namespace": eff})
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "blur dataId filter (auto-wrapped as *x* unless it contains *)")
@@ -76,10 +94,13 @@ func (a *App) newConfigListCmd() *cobra.Command {
 
 func (a *App) newConfigPublishCmd() *cobra.Command {
 	var dataID, group, ns, typ, content, file string
-	var overwrite, createOnly bool
+	var overwrite, createOnly, changeType bool
 	cmd := &cobra.Command{
-		Use:  "publish",
-		Long: "Publish a config. Default is create-only (refuse if dataId exists).\nUse --overwrite to update an existing config. --create-only is an affirmative alias of the default.",
+		Use: "publish",
+		Long: "Publish a config. Default is create-only (refuse if dataId exists).\n" +
+			"Use --overwrite to update an existing config. --create-only is an affirmative alias of the default.\n" +
+			"Type is inferred from dataId extension (.yaml/.yml/.json/.properties/.toml/...); unknown extensions require explicit --type.\n" +
+			"Overwriting with a different type requires --change-type.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if overwrite && createOnly {
 				return a.fail(cmd, risk.High, errBothCreateOverwrite())
@@ -95,16 +116,33 @@ func (a *App) newConfigPublishCmd() *cobra.Command {
 			if body == "" && file == "" && content == "" {
 				return a.fail(cmd, risk.High, errNeedContent())
 			}
+			typeSet := cmd.Flags().Changed("type")
+			resolvedType, err := domain.ResolvePublishType(dataID, typ, typeSet)
+			if err != nil {
+				return a.fail(cmd, risk.High, err)
+			}
+			eff := a.effectiveNS(ns)
 			create := !overwrite
 			would := map[string]any{
-				"action":        "config.publish",
-				"data_id":       dataID,
-				"group":         group,
-				"namespace":     ns,
-				"type":          typ,
-				"create_only":   create,
-				"overwrite":     overwrite,
-				"content_bytes": len([]byte(body)),
+				"action":              "config.publish",
+				"data_id":             dataID,
+				"group":               group,
+				"namespace":           eff,
+				"effective_namespace": eff,
+				"type":                resolvedType,
+				"create_only":         create,
+				"overwrite":           overwrite,
+				"change_type":         changeType,
+				"content_bytes":       len([]byte(body)),
+			}
+			if overwrite && a.client != nil && strings.TrimSpace(a.settings.Server) != "" {
+				if existing, err := a.client.ConfigType(dataID, group, eff); err == nil {
+					existing = strings.TrimSpace(existing)
+					if existing != "" && !strings.EqualFold(existing, resolvedType) {
+						would["type_change"] = map[string]any{"from": existing, "to": resolvedType}
+						would["warning"] = "config type would change; actual publish requires --change-type"
+					}
+				}
 			}
 			stop, err := a.gateHigh(cmd, "config.publish", would)
 			if stop || err != nil {
@@ -114,21 +152,29 @@ func (a *App) newConfigPublishCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.Publish(dataID, group, body, ns, typ, create)
+			out, err := uc.Publish(dataID, group, body, eff, resolvedType, create, changeType)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}
-			return a.ok(cmd, out)
+			return a.ok(cmd, map[string]any{
+				"result":              out,
+				"data_id":             dataID,
+				"group":               group,
+				"namespace":           eff,
+				"effective_namespace": eff,
+				"type":                resolvedType,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required)")
 	cmd.Flags().StringVar(&group, "group", "DEFAULT_GROUP", "group")
 	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id")
-	cmd.Flags().StringVar(&typ, "type", "text", "config type")
+	cmd.Flags().StringVar(&typ, "type", "", "config type (inferred from dataId when omitted)")
 	cmd.Flags().StringVar(&content, "content", "", "inline content")
 	cmd.Flags().StringVar(&file, "file", "", "read content from file")
 	cmd.Flags().BoolVar(&overwrite, "overwrite", false, "allow update of existing dataId")
 	cmd.Flags().BoolVar(&createOnly, "create-only", false, "affirmative alias of default create-only")
+	cmd.Flags().BoolVar(&changeType, "change-type", false, "allow overwrite to change the stored config type")
 	_ = cmd.MarkFlagRequired("data-id")
 	mark(cmd, risk.High, "Publish config (create-only by default)")
 	return cmd
@@ -143,12 +189,18 @@ func (a *App) newConfigHistoryCmd() *cobra.Command {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			eff := a.effectiveNS(ns)
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.History(dataID, group, ns, page, pageSize)
+			out, err := uc.History(dataID, group, eff, page, pageSize)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
-			return a.ok(cmd, out)
+			if m, ok := out.(map[string]any); ok {
+					m["namespace"] = eff
+					m["effective_namespace"] = eff
+					return a.ok(cmd, m)
+				}
+				return a.ok(cmd, map[string]any{"result": out, "namespace": eff, "effective_namespace": eff})
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required)")
@@ -166,8 +218,10 @@ func (a *App) newConfigRollbackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use: "rollback",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			eff := a.effectiveNS(ns)
 			would := map[string]any{
-				"action": "config.rollback", "data_id": dataID, "group": group, "namespace": ns, "nid": nid,
+				"action": "config.rollback", "data_id": dataID, "group": group,
+				"namespace": eff, "effective_namespace": eff, "nid": nid,
 			}
 			stop, err := a.gateHigh(cmd, "config.rollback", would)
 			if stop || err != nil {
@@ -177,11 +231,13 @@ func (a *App) newConfigRollbackCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.Rollback(dataID, group, ns, nid)
+			out, err := uc.Rollback(dataID, group, eff, nid)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}
-			return a.ok(cmd, out)
+			return a.ok(cmd, map[string]any{
+				"result": out, "namespace": eff, "effective_namespace": eff,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required)")
@@ -200,8 +256,10 @@ func (a *App) newConfigDeleteCmd() *cobra.Command {
 		Use:  "delete",
 		Long: "Delete one existing config (refuses when it does not exist). Back up first: nacos backup create --data-id <id>.",
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			eff := a.effectiveNS(ns)
 			would := map[string]any{
-				"action": "config.delete", "data_id": dataID, "group": group, "namespace": ns,
+				"action": "config.delete", "data_id": dataID, "group": group,
+				"namespace": eff, "effective_namespace": eff,
 			}
 			stop, err := a.gateHigh(cmd, "config.delete", would)
 			if stop || err != nil {
@@ -211,11 +269,13 @@ func (a *App) newConfigDeleteCmd() *cobra.Command {
 				return err
 			}
 			uc := domain.ConfigUseCase{Port: a.client}
-			out, err := uc.Delete(dataID, group, ns)
+			out, err := uc.Delete(dataID, group, eff)
 			if err != nil {
 				return a.fail(cmd, risk.High, err)
 			}
-			return a.ok(cmd, out)
+			return a.ok(cmd, map[string]any{
+				"result": out, "namespace": eff, "effective_namespace": eff,
+			})
 		},
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "dataId (required)")
