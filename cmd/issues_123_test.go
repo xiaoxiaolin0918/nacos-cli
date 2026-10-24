@@ -165,3 +165,60 @@ func TestProfileSetNormalizesPublicNamespace(t *testing.T) {
 		t.Fatalf("contextPath=%q", p.ContextPath)
 	}
 }
+
+
+func TestPublishDryRunPublicNSWithProdProfile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOME", home)
+	t.Setenv("NACOS_SERVER", "")
+	t.Setenv("NACOS_NAMESPACE", "")
+
+	name := "lab-prod"
+	root := NewRoot()
+	buf := &bytes.Buffer{}
+	root.SetOut(buf)
+	root.SetErr(&bytes.Buffer{})
+	root.SetArgs([]string{
+		"profile", "set", name,
+		"--server", "http://127.0.0.1:8848",
+		"--namespace", "prod",
+	})
+	if err := root.Execute(); err != nil {
+		t.Fatal(err, buf.String())
+	}
+
+	tmp := t.TempDir()
+	file := filepath.Join(tmp, "app.yaml")
+	if err := os.WriteFile(file, []byte("a: 1\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	buf.Reset()
+	root2 := NewRoot()
+	root2.SetOut(buf)
+	root2.SetErr(&bytes.Buffer{})
+	root2.SetArgs([]string{
+		"--profile", name,
+		"config", "publish",
+		"--data-id", "app.yaml",
+		"--group", "DEFAULT_GROUP",
+		"--file", file,
+		"--namespace", "public",
+		"--dry-run",
+	})
+	if err := root2.Execute(); err != nil {
+		t.Fatal(err, buf.String())
+	}
+	var env map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatal(err, buf.String())
+	}
+	would := env["would"].(map[string]any)
+	if ns, _ := would["namespace"].(string); ns != "" {
+		t.Fatalf("namespace=%q want empty (explicit public must not keep profile prod)", ns)
+	}
+	if eff, _ := would["effective_namespace"].(string); eff != "" {
+		t.Fatalf("effective_namespace=%q want empty", eff)
+	}
+}

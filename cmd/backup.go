@@ -81,6 +81,7 @@ Without --all, --data-id is required. Same-second runs get a -2, -3 suffix (neve
 				}
 			}
 			allPages := all && !cmd.Flags().Changed("page")
+			ns = a.effectiveNS(ns)
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
@@ -104,6 +105,7 @@ Without --all, --data-id is required. Same-second runs get a -2, -3 suffix (neve
 				"data_id":   filterID,
 				"group":     group,
 				"namespace": ns,
+				"effective_namespace": ns,
 				"page":      page,
 				"page_size": pageSize,
 				"all":       all,
