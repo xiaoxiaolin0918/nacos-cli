@@ -15,7 +15,9 @@ import (
 )
 
 // Profile is one named connection preset under ~/.nacos-cli/<name>.conf (YAML).
-// Passwords may live here for local convenience; never commit profile files to git.
+// Do NOT store passwords here; use auth login --remember (encrypted login.cred) or
+// supervisory-web .login/<name>. Legacy plaintext password fields are ignored on load
+// and stripped on save. Never commit profile files to git.
 type Profile struct {
 	Server      string `yaml:"server,omitempty" json:"server,omitempty"`
 	Host        string `yaml:"host,omitempty" json:"host,omitempty"`
@@ -103,6 +105,8 @@ func loadProfileFile(path string) (Profile, bool, error) {
 		return Profile{}, true, fmt.Errorf("parse %s: %w", path, err)
 	}
 	p.normalize()
+	// Legacy YAML passwords are ignored; prefer encrypted .login or env.
+	p.Password = ""
 	return p, true, nil
 }
 
@@ -140,6 +144,8 @@ func SaveProfileIn(dir, name string, p Profile) (string, error) {
 		return "", err
 	}
 	p.normalize()
+	// Never persist plaintext passwords; use auth login --remember (login.cred).
+	p.Password = ""
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}

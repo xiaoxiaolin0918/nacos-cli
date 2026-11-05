@@ -46,7 +46,7 @@ Profiles live **outside** the repo: `~/.nacos-cli/<name>.conf` (YAML). Never com
 | `user` | `list` `create` `delete` `passwd` |
 | `role` | `list` `bind` `unbind` |
 | `permission` | `list` `grant` `revoke` |
-| `auth` | `login` `logout` `status` (password or `--web`) |
+| `auth` | `login` (`--remember`) `logout` (`--forget`) `status`; global `--auto-login` / `NACOS_AUTO_LOGIN` |
 | `web` | Local loopback console: profiles + meta + audit (`127.0.0.1` only) |
 | `whoami` / `doctor` | read-only session / connectivity |
 | `profile` | `list` `show` `path` `set` `delete` |
@@ -90,6 +90,15 @@ Read commands (`list` / `get` / `whoami` / `profile show` / …) always emit the
 ## Secrets — hard rules
 
 Never commit `.env`, tokens, passwords, `backups/`, `~/.nacos-cli/*.conf`, or credentials files.
+
+### Auth token + optional auto-login
+
+- `credentials.json` (OS config dir): access token only.
+- `login.cred` (+ `login.key` on non-Windows): encrypted password for opt-in auto-login. **Win=DPAPI**; **macOS/Linux=AES-GCM** with local `login.key` (0600). Never Credential Manager/Keychain.
+- `auth login --remember` (alias `--store-password`) writes `login.cred`. Default off. Unchecking remember / `saveRemembered(..., false)` **clears** prior `login.cred`.
+- `--auto-login` / `--auto-renew` (env `NACOS_AUTO_LOGIN=1`) default off; on HTTP **401** (or token-expiry-like 403) silent login **once** on read **and** write paths, write back token, replay. ACL 403 does not renew or clear stored password. Credential pair is atomic: env `NACOS_USERNAME`+`NACOS_PASSWORD` **or** whole `login.cred` (no mix).
+- `auth logout` clears **token only**; `auth logout --forget` (alias `--clear-password`) double-clears credentials-dir `login.cred`/`login.key` **and** current `--profile` `~/.nacos-cli/.login/<name>/`. Bad silent-login credentials clear remembered password automatically.
+- Profile YAML must **not** store plaintext passwords (`profile set --password` rejected; load ignores / save strips `password`). Prefer `auth login --remember`.
 
 ## Build & test
 

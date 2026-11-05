@@ -18,21 +18,23 @@ import (
 )
 
 type App struct {
-	flagServer   string
-	flagUsername string
-	flagFormat   string
-	flagOutput   string
-	flagDryRun   bool
-	flagYes      bool
-	flagTimeout  string
-	flagConfig   string
-	flagProfile  string
-	flagNS       string
+	flagServer    string
+	flagUsername  string
+	flagFormat    string
+	flagOutput    string
+	flagDryRun    bool
+	flagYes       bool
+	flagTimeout   string
+	flagConfig    string
+	flagProfile   string
+	flagNS        string
+	flagAutoLogin bool
 
 	settings    config.Settings
 	format      string
 	dryRun      bool
 	yes         bool
+	autoLogin   bool
 	client      *client.Client
 	credPath    string
 	secrets     []string
@@ -64,7 +66,7 @@ func NewRoot() *cobra.Command {
 		Long: `nacos-cli talks to a Nacos server over Open API.
 
 Auth uses accessToken from POST /v1/auth/login (or AUTH_DISABLED).
-Credentials (token only, never password) live under the OS config dir.
+Access tokens live under the OS config dir (credentials.json). Optional encrypted login.cred (Win=DPAPI; else AES-GCM+login.key) enables --auto-login; passwords never go in conf/audit.
 
 Profiles: ~/.nacos-cli/<name>.conf (YAML). Select with --profile (default: default)
 or an explicit file via --config. Priority: flags > --config > --profile > env/.env > defaults.
@@ -100,6 +102,8 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 	p.StringVar(&a.flagOutput, "output", "", "alias of --format (json|pretty); official CLI parity")
 	p.BoolVar(&a.flagDryRun, "dry-run", false, "print the would-be action and do not call Nacos")
 	p.BoolVarP(&a.flagYes, "yes", "y", false, "confirm a high-risk write")
+	p.BoolVar(&a.flagAutoLogin, "auto-login", false, "on HTTP 401 or token-expiry 403, silent login once from NACOS_USERNAME+PASSWORD or encrypted login.cred and replay (env NACOS_AUTO_LOGIN=1); alias: --auto-renew")
+	p.BoolVar(&a.flagAutoLogin, "auto-renew", false, "alias of --auto-login")
 
 	root.AddCommand(
 		a.newConfigCmd(),
@@ -228,6 +232,14 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	a.client = c
+
+	a.autoLogin = a.flagAutoLogin || envTruthy("NACOS_AUTO_LOGIN")
+	if !a.autoLogin {
+		if _, prefer, ok := credstore.PeekLogin(credstore.DirFromCredentialsPath(credPath)); ok && prefer {
+			a.autoLogin = true
+		}
+	}
+	a.wireAutoRenew()
 	return nil
 }
 

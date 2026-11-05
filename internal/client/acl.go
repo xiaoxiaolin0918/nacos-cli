@@ -11,7 +11,7 @@ import (
 )
 
 func (c *Client) mutateJSON(method, path string, query, form url.Values) (any, error) {
-	b, status, _, err := c.do(context.Background(), method, path, query, form)
+	b, status, _, err := c.doWithRenew(context.Background(), method, path, query, form)
 	if err != nil {
 		return nil, err
 	}

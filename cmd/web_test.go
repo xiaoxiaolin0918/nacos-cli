@@ -17,6 +17,22 @@ import (
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/credstore"
 )
 
+
+func saveProfileWithPassword(t *testing.T, dir, name string, p config.Profile) {
+	t.Helper()
+	pass := p.Password
+	if _, err := config.SaveProfileIn(dir, name, p); err != nil {
+		t.Fatal(err)
+	}
+	if pass == "" {
+		return
+	}
+	p.Password = pass
+	if err := persistProfilePassword(dir, name, &p, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestWebAPIProfilesCRUD(t *testing.T) {
 	dir := t.TempDir()
 	auditPath := filepath.Join(dir, "audit.jsonl")
@@ -101,8 +117,15 @@ func TestWebAPIProfilesCRUD(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("load err=%v ok=%v", err, ok)
 	}
+	if got.Password != "" {
+		t.Fatalf("password must not stay in profile YAML, got %q", got.Password)
+	}
+	if !credstore.HasLogin(credstore.ProfileLoginDir(dir, "lab")) {
+		t.Fatal("encrypted login.cred missing after password keep")
+	}
+	hydrateProfilePassword(dir, "lab", &got)
 	if got.Password != "s3cret-pw" {
-		t.Fatalf("password should be kept, got %q", got.Password)
+		t.Fatalf("hydrated password want s3cret-pw got %q", got.Password)
 	}
 	if got.Server != "http://127.0.0.1:8849" {
 		t.Fatalf("server=%q", got.Server)
@@ -294,12 +317,9 @@ func TestWebCheckAuthTokenOK(t *testing.T) {
 	defer nacos.Close()
 
 	dir := t.TempDir()
-	_, err := config.SaveProfileIn(dir, "lab", config.Profile{
+	saveProfileWithPassword(t, dir, "lab", config.Profile{
 		Server: nacos.URL, Username: "nacos", Password: "s3cret-pw", ContextPath: "/nacos",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	srv := newWebServer(dir, &audit.Store{Path: filepath.Join(dir, "a.jsonl")})
 	req := httptest.NewRequest(http.MethodPost, "/api/profiles/lab/check-auth", nil)
 	rr := httptest.NewRecorder()
@@ -371,7 +391,7 @@ func TestWebCheckAuthBadPassword(t *testing.T) {
 	}))
 	defer nacos.Close()
 	dir := t.TempDir()
-	_, _ = config.SaveProfileIn(dir, "bad", config.Profile{
+	saveProfileWithPassword(t, dir, "bad", config.Profile{
 		Server: nacos.URL, Username: "nacos", Password: "wrong-pw-xyz", ContextPath: "/nacos",
 	})
 	srv := newWebServer(dir, &audit.Store{Path: filepath.Join(dir, "a.jsonl")})
@@ -600,12 +620,9 @@ func TestWebCheckAuthDraftUsesFormPassword(t *testing.T) {
 	defer nacos.Close()
 
 	dir := t.TempDir()
-	_, err := config.SaveProfileIn(dir, "lab", config.Profile{
+	saveProfileWithPassword(t, dir, "lab", config.Profile{
 		Server: nacos.URL, Username: "nacos", Password: "disk-wrong", ContextPath: "/nacos",
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	srv := newWebServer(dir, &audit.Store{Path: filepath.Join(dir, "a.jsonl")})
 	body := map[string]any{
 		"server": nacos.URL, "username": "nacos", "password": "form-pw-ok", "password_set": true, "contextPath": "/nacos",
@@ -632,8 +649,12 @@ func TestWebCheckAuthDraftUsesFormPassword(t *testing.T) {
 	if resp["via"] != "password" {
 		t.Fatalf("via=%v", resp["via"])
 	}
-	// disk unchanged
+	// disk YAML has no plaintext; encrypted remembered password unchanged
 	saved, _, _ := config.LoadProfileIn(dir, "lab")
+	if saved.Password != "" {
+		t.Fatalf("profile YAML must not hold password, got %q", saved.Password)
+	}
+	hydrateProfilePassword(dir, "lab", &saved)
 	if saved.Password != "disk-wrong" {
 		t.Fatalf("check-auth must not persist draft password, got %q", saved.Password)
 	}
@@ -661,7 +682,7 @@ func TestWebCheckAuthDraftEmptyPasswordKeepsSaved(t *testing.T) {
 	}))
 	defer nacos.Close()
 	dir := t.TempDir()
-	_, _ = config.SaveProfileIn(dir, "lab", config.Profile{
+	saveProfileWithPassword(t, dir, "lab", config.Profile{
 		Server: nacos.URL, Username: "nacos", Password: "saved-pw", ContextPath: "/nacos",
 	})
 	srv := newWebServer(dir, &audit.Store{Path: filepath.Join(dir, "a.jsonl")})

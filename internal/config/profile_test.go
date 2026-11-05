@@ -57,8 +57,11 @@ func TestSaveLoadProfile(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("ok=%v err=%v", ok, err)
 	}
-	if got.Server != p.Server || got.Username != p.Username || got.Password != p.Password {
+	if got.Server != p.Server || got.Username != p.Username {
 		t.Fatalf("%+v", got)
+	}
+	if got.Password != "" {
+		t.Fatalf("password must not persist in profile YAML: %+v", got)
 	}
 	if got.Namespace != "ns1" || got.ContextPath != "/nacos" || got.Format != "json" {
 		t.Fatalf("%+v", got)
@@ -66,6 +69,9 @@ func TestSaveLoadProfile(t *testing.T) {
 	raw, _ := os.ReadFile(path)
 	if !strings.Contains(string(raw), "server:") {
 		t.Fatalf("expected yaml keys: %s", raw)
+	}
+	if strings.Contains(string(raw), "secret-pw") {
+		t.Fatal("plaintext password landed in profile file")
 	}
 }
 

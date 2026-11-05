@@ -1,7 +1,7 @@
 package version
 
 // Version is overridable via -ldflags "-X .../internal/version.Version=x.y.z".
-var Version = "0.3.3"
+var Version = "0.3.4"
 
 const Name = "nacos-cli"
 

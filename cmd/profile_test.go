@@ -59,7 +59,6 @@ func TestProfileSetShowListDelete(t *testing.T) {
 		"profile", "set", name,
 		"--server", "http://127.0.0.1:8848",
 		"--username", "nacos",
-		"--password", "super-secret",
 		"--default-format", "pretty",
 	})
 	if err := root.Execute(); err != nil {
@@ -95,8 +94,11 @@ func TestProfileSetShowListDelete(t *testing.T) {
 	}
 	res := env["result"].(map[string]any)
 	prof := res["profile"].(map[string]any)
-	if prof["password"] != "******" {
-		t.Fatalf("%v", prof)
+	if pw, _ := prof["password"].(string); pw != "" && pw != "******" {
+		t.Fatalf("unexpected password field: %v", prof)
+	}
+	if prof["password_set"] == true {
+		t.Fatalf("password_set should be false without remembered secret: %v", prof)
 	}
 	if prof["server"] != "http://127.0.0.1:8848" {
 		t.Fatalf("%v", prof)

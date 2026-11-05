@@ -210,6 +210,9 @@ func (s *webServer) handleCheckAuth(w http.ResponseWriter, r *http.Request, name
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "profile": name, "error": err.Error()})
 		return
 	}
+	if ok {
+		hydrateProfilePassword(s.dir, name, &existing)
+	}
 
 	p := existing
 	usedDraft := false

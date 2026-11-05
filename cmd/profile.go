@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -17,7 +18,7 @@ func (a *App) newProfileCmd() *cobra.Command {
 		Long: `Named profiles (official nacos-cli layout under ~/.nacos-cli/).
 
 Priority (high to low): flags > --config file > --profile > env/.env > defaults.
-Passwords in profile files are local-only; never commit them. profile show masks password.`,
+Do not store passwords in profile YAML; use auth login --remember (encrypted login.cred). Legacy password fields are stripped on save.`,
 		RunE: helpOnly,
 	}
 	cmd.AddCommand(
@@ -130,7 +131,7 @@ func (a *App) newProfileSetCmd() *cobra.Command {
 		Args: cobra.ExactArgs(1),
 		Long: "Create or update a profile YAML under ~/.nacos-cli/<name>.conf (mode 0600).\n" +
 			"Uses root flags --server / --username / --namespace when provided.\n" +
-			"Prefer NACOS_PASSWORD env for secrets; --password is optional and local-only.",
+			"Passwords must not be written into profile YAML. Use: nacos auth login --remember (encrypted login.cred).",
 		Example: `  nacos profile set lab --server http://127.0.0.1:8848 --username nacos
   nacos profile set lab --host 127.0.0.1 --port 8848 --username nacos --default-format json
   nacos --profile lab namespace list`,
@@ -161,8 +162,8 @@ func (a *App) newProfileSetCmd() *cobra.Command {
 			if changed(cmd, "username") && strings.TrimSpace(a.flagUsername) != "" {
 				p.Username = strings.TrimSpace(a.flagUsername)
 			}
-			if cmd.Flags().Changed("password") {
-				p.Password = password
+			if cmd.Flags().Changed("password") && strings.TrimSpace(password) != "" {
+				return a.fail(cmd, risk.Write, errors.New("profile must not store plaintext password; use: nacos auth login --remember (or NACOS_PASSWORD env)"))
 			}
 			if changed(cmd, "namespace") {
 				p.Namespace = config.NormalizeNamespaceID(a.flagNS)
@@ -200,7 +201,7 @@ func (a *App) newProfileSetCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&host, "host", "", "host (official-style; composed with --port into server)")
 	cmd.Flags().IntVar(&port, "port", 8848, "port used with --host")
-	cmd.Flags().StringVar(&password, "password", "", "optional local password (prefer env)")
+	cmd.Flags().StringVar(&password, "password", "", "rejected: use auth login --remember instead")
 	cmd.Flags().StringVar(&contextPath, "context-path", "", "API context path (default /nacos). Under Git Bash use MSYS_NO_PATHCONV=1 so /nacos is not rewritten")
 	cmd.Flags().StringVar(&defaultFormat, "default-format", "", "default output format stored in profile: json|pretty")
 	mark(cmd, risk.Write, "Create or update a local profile file")

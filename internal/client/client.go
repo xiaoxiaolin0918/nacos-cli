@@ -24,6 +24,9 @@ type Client struct {
 	HTTP     *http.Client
 	Token    string
 	AuthMode string
+	// RenewOnce, when set, is invoked at most once on HTTP 401 (or token-expiry-like 403)
+	// to refresh the token before replaying the request. Nil'd after one use here.
+	RenewOnce func(ctx context.Context) error
 }
 
 func New(settings config.Settings) *Client {
@@ -157,8 +160,45 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	return b, res.StatusCode, u, nil
 }
 
+// shouldAttemptRenew reports whether the response looks like an expired/missing
+// access token. ACL denials (often HTTP 403 without token-expiry wording) must
+// NOT trigger silent re-login or clear remembered passwords.
+func shouldAttemptRenew(status int, body []byte) bool {
+	if status == http.StatusUnauthorized {
+		return true
+	}
+	if status != http.StatusForbidden {
+		return false
+	}
+	low := strings.ToLower(string(body))
+	if strings.Contains(low, "token") && (strings.Contains(low, "expired") ||
+		strings.Contains(low, "invalid") || strings.Contains(low, "unauthorized") ||
+		strings.Contains(low, "access denied") || strings.Contains(low, "not authorized")) {
+		return true
+	}
+	return false
+}
+
+// doWithRenew performs one request; on token-auth failure with RenewOnce set,
+// renews once and retries. Renew errors are returned (not dropped).
+func (c *Client) doWithRenew(ctx context.Context, method, path string, query url.Values, form url.Values) ([]byte, int, string, error) {
+	b, status, u, err := c.do(ctx, method, path, query, form)
+	if err != nil {
+		return b, status, u, err
+	}
+	if !shouldAttemptRenew(status, b) || c.RenewOnce == nil {
+		return b, status, u, nil
+	}
+	renew := c.RenewOnce
+	c.RenewOnce = nil // only once per Client for this command
+	if rerr := renew(ctx); rerr != nil {
+		return b, status, u, fmt.Errorf("%w (original HTTP %d: %s)", rerr, status, truncate(string(b), 200))
+	}
+	return c.do(ctx, method, path, query, form)
+}
+
 func (c *Client) getJSON(ctx context.Context, path string, query url.Values) (any, error) {
-	b, status, _, err := c.do(ctx, http.MethodGet, path, query, nil)
+	b, status, _, err := c.doWithRenew(ctx, http.MethodGet, path, query, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +219,7 @@ func (c *Client) getJSON(ctx context.Context, path string, query url.Values) (an
 }
 
 func (c *Client) getText(ctx context.Context, path string, query url.Values) (string, error) {
-	b, status, _, err := c.do(ctx, http.MethodGet, path, query, nil)
+	b, status, _, err := c.doWithRenew(ctx, http.MethodGet, path, query, nil)
 	if err != nil {
 		return "", err
 	}
@@ -223,19 +263,7 @@ func (c *Client) ConfigPublish(dataID, group, content, namespace, typ string) (a
 	form.Set("content", content)
 	form.Set("tenant", c.ns(namespace))
 	form.Set("type", typ)
-	b, status, _, err := c.do(context.Background(), http.MethodPost, "/v1/cs/configs", nil, form)
-	if err != nil {
-		return nil, err
-	}
-	if status >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", status, truncate(string(b), 200))
-	}
-	if json.Valid(b) {
-		var v any
-		_ = json.Unmarshal(b, &v)
-		return v, nil
-	}
-	return strings.TrimSpace(string(b)), nil
+	return c.mutateJSON(http.MethodPost, "/v1/cs/configs", nil, form)
 }
 
 // ConfigType returns the stored config type (show=all), "" when unknown.
@@ -263,19 +291,7 @@ func (c *Client) ConfigDelete(dataID, group, namespace string) (any, error) {
 	q.Set("dataId", dataID)
 	q.Set("group", group)
 	q.Set("tenant", c.ns(namespace))
-	b, status, _, err := c.do(context.Background(), http.MethodDelete, "/v1/cs/configs", q, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", status, truncate(string(b), 200))
-	}
-	if json.Valid(b) {
-		var v any
-		_ = json.Unmarshal(b, &v)
-		return v, nil
-	}
-	return strings.TrimSpace(string(b)), nil
+	return c.mutateJSON(http.MethodDelete, "/v1/cs/configs", q, nil)
 }
 
 func (c *Client) ConfigHistory(dataID, group, namespace string, pageNo, pageSize int) (any, error) {
@@ -334,14 +350,7 @@ func (c *Client) InstanceRegister(service, ip string, port int, namespace, group
 	form.Set("weight", "1.0")
 	form.Set("enabled", "true")
 	form.Set("healthy", "true")
-	b, status, _, err := c.do(context.Background(), http.MethodPost, "/v1/ns/instance", nil, form)
-	if err != nil {
-		return nil, err
-	}
-	if status >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", status, truncate(string(b), 200))
-	}
-	return strings.TrimSpace(string(b)), nil
+	return c.mutateJSON(http.MethodPost, "/v1/ns/instance", nil, form)
 }
 
 func (c *Client) InstanceDeregister(service, ip string, port int, namespace, group, cluster string, ephemeral bool) (any, error) {
@@ -353,14 +362,7 @@ func (c *Client) InstanceDeregister(service, ip string, port int, namespace, gro
 	q.Set("groupName", group)
 	q.Set("clusterName", cluster)
 	q.Set("ephemeral", strconv.FormatBool(ephemeral))
-	b, status, _, err := c.do(context.Background(), http.MethodDelete, "/v1/ns/instance", q, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", status, truncate(string(b), 200))
-	}
-	return strings.TrimSpace(string(b)), nil
+	return c.mutateJSON(http.MethodDelete, "/v1/ns/instance", q, nil)
 }
 
 func (c *Client) InstanceEnabled(service, ip string, port int, enabled bool, namespace, group, cluster string, ephemeral bool) (any, error) {
@@ -373,14 +375,7 @@ func (c *Client) InstanceEnabled(service, ip string, port int, enabled bool, nam
 	q.Set("groupName", group)
 	q.Set("clusterName", cluster)
 	q.Set("ephemeral", strconv.FormatBool(ephemeral))
-	b, status, _, err := c.do(context.Background(), http.MethodPut, "/v1/ns/instance", q, nil)
-	if err != nil {
-		return nil, err
-	}
-	if status >= 400 {
-		return nil, fmt.Errorf("HTTP %d: %s", status, truncate(string(b), 200))
-	}
-	return strings.TrimSpace(string(b)), nil
+	return c.mutateJSON(http.MethodPut, "/v1/ns/instance", q, nil)
 }
 
 func (c *Client) NamespaceList() (any, error) {

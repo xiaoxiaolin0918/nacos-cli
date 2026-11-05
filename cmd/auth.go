@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/xiaoxiaolin0918/nacos-cli/internal/config"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/credstore"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/output"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/risk"
@@ -22,27 +23,31 @@ func (a *App) newAuthCmd() *cobra.Command {
 
 func (a *App) newLoginCmd() *cobra.Command {
 	var username, password string
-	var web, browser bool
+	var web, browser, remember, storePassword bool
 	cmd := &cobra.Command{
 		Use: "login",
 		Long: `POST /v1/auth/login. On AUTH_DISABLED servers, stores auth_mode=disabled without a token.
 Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
---web starts a 127.0.0.1-only form (120s timeout).`,
+--web starts a 127.0.0.1-only form (120s timeout).
+--remember (alias --store-password) encrypts the password into login.cred beside credentials.json
+(Win=DPAPI; macOS/Linux=AES-GCM+login.key) for later --auto-login. Password never enters conf/audit.`,
 		Example: `  nacos auth login --username nacos
+  nacos auth login --remember
   nacos auth login --web
   nacos auth login --dry-run`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			store := remember || storePassword
 			if a.dryRun {
 				return a.write(cmd, output.Envelope{
 					OK: true, DryRun: true, Risk: risk.Write,
-					Would: map[string]any{"action": "auth.login", "web": web || browser, "server": a.settings.Server},
+					Would: map[string]any{"action": "auth.login", "web": web || browser, "server": a.settings.Server, "remember": store},
 				})
 			}
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
 			if web || browser {
-				return a.runWebLogin(cmd)
+				return a.runWebLogin(cmd, store)
 			}
 			user := username
 			if user == "" {
@@ -58,7 +63,6 @@ Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
 			if pass == "" {
 				p, err := promptPassword(cmd)
 				if err != nil {
-					// allow empty password for AUTH_DISABLED
 					pass = ""
 				} else {
 					pass = p
@@ -79,8 +83,13 @@ Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
 			if err := credstore.Save(a.credPath, cred); err != nil {
 				return a.fail(cmd, risk.Write, err)
 			}
+			if err := a.saveRemembered(user, pass, store); err != nil {
+				return a.fail(cmd, risk.Write, fmt.Errorf("token saved but remember failed: %w", err))
+			}
 			st := credstore.Status(a.credPath)
 			st["ok"] = true
+			st["password_stored"] = store && pass != ""
+			st["remembered"] = a.rememberedStatus()
 			return a.ok(cmd, st)
 		},
 	}
@@ -88,6 +97,8 @@ Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
 	cmd.Flags().StringVar(&password, "password", "", "login password (never printed)")
 	cmd.Flags().BoolVar(&web, "web", false, "open a local browser form on 127.0.0.1")
 	cmd.Flags().BoolVar(&browser, "browser", false, "alias of --web")
+	cmd.Flags().BoolVar(&remember, "remember", false, "encrypt password into login.cred for --auto-login (opt-in)")
+	cmd.Flags().BoolVar(&storePassword, "store-password", false, "alias of --remember")
 	mark(cmd, risk.Write, "Log in and persist access token (or AUTH_DISABLED)")
 	return cmd
 }
@@ -108,21 +119,68 @@ func promptPassword(cmd *cobra.Command) (string, error) {
 }
 
 func (a *App) newLogoutCmd() *cobra.Command {
+	var forget, clearPassword bool
 	cmd := &cobra.Command{
 		Use: "logout",
+		Long: `Clear the local access token (credentials.json). Encrypted login.cred is kept by default
+so --auto-login can mint a new token later. Pass --forget (alias --clear-password) to also
+remove credentials-dir login.cred/login.key AND the current --profile encrypted store under
+~/.nacos-cli/.login/<profile>/ (supervisory-web remembered passwords). Default logout never
+double-clears; only --forget does.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			cleared := true
+			doForget := forget || clearPassword
+			would := map[string]any{
+				"action":                 "auth.logout",
+				"clear_token":            true,
+				"clear_login_cred":       doForget,
+				"clear_profile_login":    doForget,
+				"credentials_path":       a.credPath,
+				"login_cred_path":        credstore.LoginPath(a.loginDir()),
+				"profile":                a.profileName,
+			}
+			if a.dryRun {
+				return a.write(cmd, output.Envelope{OK: true, DryRun: true, Risk: risk.Write, Would: would})
+			}
+			clearedToken := true
 			if err := credstore.Clear(a.credPath); err != nil {
-				cleared = false
+				clearedToken = false
 			}
 			a.client.ApplyToken("", "none")
+			clearedLogin := false
+			clearedProfileLogin := false
+			profileLoginPath := ""
+			if doForget {
+				if err := credstore.ClearLogin(a.loginDir()); err != nil {
+					return a.fail(cmd, risk.Write, err)
+				}
+				clearedLogin = true
+				if pdir, err := config.ProfileDir(); err == nil && strings.TrimSpace(a.profileName) != "" {
+					pldir := credstore.ProfileLoginDir(pdir, a.profileName)
+					profileLoginPath = credstore.LoginPath(pldir)
+					if err := credstore.ClearLogin(pldir); err != nil {
+						return a.fail(cmd, risk.Write, err)
+					}
+					clearedProfileLogin = true
+				}
+				a.autoLogin = false
+				if a.client != nil {
+					a.client.RenewOnce = nil
+				}
+			}
 			return a.ok(cmd, map[string]any{
-				"credentials_path": a.credPath,
-				"cleared":          cleared,
+				"credentials_path":      a.credPath,
+				"cleared":               clearedToken,
+				"cleared_token":         clearedToken,
+				"cleared_login":         clearedLogin,
+				"cleared_profile_login": clearedProfileLogin,
+				"profile_login_path":    profileLoginPath,
+				"forgot_password":       doForget,
 			})
 		},
 	}
-	mark(cmd, risk.Write, "Clear local credentials file")
+	cmd.Flags().BoolVar(&forget, "forget", false, "also delete encrypted login.cred (+login.key) and current profile ~/.nacos-cli/.login/<name>")
+	cmd.Flags().BoolVar(&clearPassword, "clear-password", false, "alias of --forget")
+	mark(cmd, risk.Write, "Clear local access token; --forget also clears remembered passwords")
 	return cmd
 }
 
@@ -143,6 +201,8 @@ func (a *App) runAuthStatus(cmd *cobra.Command, probe bool) error {
 	st := credstore.Status(a.credPath)
 	st["server_env"] = a.settings.Server
 	st["ok"] = true
+	st["remembered"] = a.rememberedStatus()
+	st["auto_renew"] = a.autoLogin
 	if !probe {
 		return a.ok(cmd, st)
 	}

@@ -1,4 +1,4 @@
-package client
+﻿package client
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 // ServerState probes console server state (version etc.). Best-effort; empty on failure.
 func (c *Client) ServerState(ctx context.Context) map[string]any {
-	b, status, _, err := c.do(ctx, "GET", "/v1/console/server/state", nil, nil)
+	b, status, _, err := c.doWithRenew(ctx, "GET", "/v1/console/server/state", nil, nil)
 	out := map[string]any{"http_status": status}
 	if err != nil {
 		out["ok"] = false
@@ -34,3 +34,4 @@ func (c *Client) ServerState(ctx context.Context) map[string]any {
 	out["ok"] = true
 	return out
 }
+

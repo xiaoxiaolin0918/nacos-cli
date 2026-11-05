@@ -110,8 +110,12 @@ Writes need **`--dry-run`** (preview) or **`--yes`/`-y`** (execute). Missing gat
 .\nacos.ps1 namespace list --output json
 .\nacos.ps1 doctor
 .\nacos.ps1 auth login
+.\nacos.ps1 auth login --remember
 .\nacos.ps1 auth login --web
+.\nacos.ps1 --auto-login namespace list
 .\nacos.ps1 auth status
+.\nacos.ps1 auth logout          # token only
+.\nacos.ps1 auth logout --forget # also clears login.cred + profile .login
 .\nacos.ps1 whoami --probe
 .\nacos.ps1 skills list
 .\nacos.ps1 profile list

@@ -24,7 +24,7 @@ import (
 
 const webLoginTimeout = 120 * time.Second
 
-func (a *App) runWebLogin(cmd *cobra.Command) error {
+func (a *App) runWebLogin(cmd *cobra.Command, remember bool) error {
 	token := make([]byte, 16)
 	if _, err := rand.Read(token); err != nil {
 		return a.fail(cmd, risk.Write, err)
@@ -45,7 +45,11 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 		lang := webLang(r.Header.Get("Accept-Language"))
 		switch r.Method {
 		case http.MethodGet:
-			body := formHTML(a.settings.BaseURL(), a.settings.Username, "", lang)
+			preUser, preRemember := a.webLoginPrefill()
+			if remember {
+				preRemember = true
+			}
+			body := formHTML(a.settings.BaseURL(), firstNonEmpty(preUser, a.settings.Username), "", lang, preRemember)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			_, _ = io.WriteString(w, body)
@@ -53,6 +57,7 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 			_ = r.ParseForm()
 			user := strings.TrimSpace(r.Form.Get("username"))
 			pass := r.Form.Get("password")
+			wantRemember := remember || r.Form.Get("remember") == "1" || strings.EqualFold(r.Form.Get("remember"), "on")
 			a.track(pass)
 			res, err := a.client.Login(r.Context(), user, pass)
 			if err != nil {
@@ -74,10 +79,11 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 				once.Do(func() { ch <- outcome{err: err} })
 				return
 			}
+			remErr := a.saveRemembered(user, pass, wantRemember)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = io.WriteString(w, okHTML(a.settings.Server, res.AuthMode, lang))
+			_, _ = io.WriteString(w, okHTML(a.settings.Server, res.AuthMode, lang, wantRemember && remErr == nil, remErr))
 			once.Do(func() {
-				ch <- outcome{user: user, res: map[string]any{"auth_mode": res.AuthMode, "has_token": res.HasToken}}
+				ch <- outcome{user: user, res: map[string]any{"auth_mode": res.AuthMode, "has_token": res.HasToken, "password_stored": wantRemember && remErr == nil}}
 			})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -152,18 +158,33 @@ padding:10px 12px;margin:12px 0;font-size:13px}
 code{font-size:12px;word-break:break-all}
 `
 
-func formHTML(serverHint, username, errMsg, lang string) string {
-	title, target, passHint, userLabel, passLabel, submit :=
-		"nacos-cli Login", "Target", "Password stays in this form; the CLI never prints it.",
-		"Username", "Password", "Sign in"
+func (a *App) webLoginPrefill() (username string, remember bool) {
+	username = strings.TrimSpace(a.settings.Username)
+	if u, auto, ok := credstore.PeekLogin(a.loginDir()); ok {
+		if strings.TrimSpace(u) != "" {
+			username = u
+		}
+		remember = auto
+	}
+	return username, remember
+}
+
+func formHTML(serverHint, username, errMsg, lang string, remember bool) string {
+	title, target, passHint, userLabel, passLabel, submit, remLabel :=
+		"nacos-cli Login", "Target", "Password stays in this form; the CLI never prints it. Check remember to encrypt for --auto-login (never into conf).",
+		"Username", "Password", "Sign in", "Remember and auto-login"
 	if lang == "zh" {
-		title, target, passHint, userLabel, passLabel, submit =
-			"nacos-cli 登录", "目标", "密码仅留在本表单；CLI 不会打印密码。",
-			"用户名", "密码", "登录"
+		title, target, passHint, userLabel, passLabel, submit, remLabel =
+			"nacos-cli 登录", "目标", "密码仅留在本表单；勾选「记住并自动登录」后以本机加密写入 login.cred（Windows=DPAPI），供 --auto-login；明文不进 conf。",
+			"用户名", "密码", "登录", "记住并自动登录"
 	}
 	errBlock := ""
 	if errMsg != "" {
 		errBlock = `<p class="err">` + html.EscapeString(errMsg) + `</p>`
+	}
+	rememberAttr := ""
+	if remember {
+		rememberAttr = " checked"
 	}
 	return `<!doctype html>
 <html lang="` + html.EscapeString(lang) + `"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -179,18 +200,29 @@ func formHTML(serverHint, username, errMsg, lang string) string {
 <input name="username" value="` + html.EscapeString(username) + `" autocomplete="username" required>
 <label>` + html.EscapeString(passLabel) + `</label>
 <input name="password" type="password" autocomplete="current-password">
+<label style="margin-top:12px;font-weight:400"><input type="checkbox" name="remember" value="1"` + rememberAttr + `> ` + html.EscapeString(remLabel) + `</label>
 <button class="primary" type="submit">` + html.EscapeString(submit) + `</button>
 </form>
 </div>
 </body></html>`
 }
 
-func okHTML(server, authMode, lang string) string {
+func okHTML(server, authMode, lang string, remembered bool, rememberErr error) string {
 	title, serverL, modeL, closeHint :=
 		"Login saved", "Server", "Auth mode", "You can close this tab."
 	if lang == "zh" {
 		title, serverL, modeL, closeHint =
 			"登录已保存", "服务器", "认证模式", "可关闭此标签页。"
+	}
+	extra := ""
+	if rememberErr != nil {
+		extra = `<p class="err">` + html.EscapeString("remember failed: "+rememberErr.Error()) + `</p>`
+	} else if remembered {
+		msg := "Password encrypted into login.cred for --auto-login."
+		if lang == "zh" {
+			msg = "密码已加密写入 login.cred，可供 --auto-login。"
+		}
+		extra = `<p class="hint">` + html.EscapeString(msg) + `</p>`
 	}
 	return `<!doctype html>
 <html lang="` + html.EscapeString(lang) + `"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -200,6 +232,7 @@ func okHTML(server, authMode, lang string) string {
 <h1>` + html.EscapeString(title) + `</h1>
 <p class="hint">` + html.EscapeString(serverL) + `: <code>` + html.EscapeString(server) + `</code></p>
 <p class="hint">` + html.EscapeString(modeL) + `: <code>` + html.EscapeString(authMode) + `</code></p>
+` + extra + `
 <p class="hint">` + html.EscapeString(closeHint) + `</p>
 </div>
 </body></html>`

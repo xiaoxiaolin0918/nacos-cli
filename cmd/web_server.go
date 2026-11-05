@@ -60,7 +60,7 @@ func (s *webServer) handleProfiles(w http.ResponseWriter, r *http.Request) {
 		meta, _, _ := config.LoadMetaIn(s.dir, name)
 		items = append(items, map[string]any{
 			"name":    name,
-			"profile": p.RedactedView(),
+			"profile": redactedProfileView(s.dir, name, p),
 			"meta":    meta,
 		})
 	}
@@ -112,7 +112,7 @@ func (s *webServer) getProfile(w http.ResponseWriter, name string) {
 	}
 	meta, _, _ := config.LoadMetaIn(s.dir, name)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "name": name, "profile": p.RedactedView(), "meta": meta,
+		"ok": true, "name": name, "profile": redactedProfileView(s.dir, name, p), "meta": meta,
 	})
 }
 
@@ -128,6 +128,7 @@ func (s *webServer) putProfile(w http.ResponseWriter, r *http.Request, name stri
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	hydrateProfilePassword(s.dir, name, &existing)
 	p, err := mergeProfileWrite(existing, req)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error()})
@@ -135,6 +136,10 @@ func (s *webServer) putProfile(w http.ResponseWriter, r *http.Request, name stri
 	}
 	if strings.TrimSpace(p.Server) == "" && strings.TrimSpace(p.Host) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "server or host required"})
+		return
+	}
+	if err := persistProfilePassword(s.dir, name, &p, req.ClearPassword); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
 	if _, err := config.SaveProfileIn(s.dir, name, p); err != nil {
@@ -150,7 +155,7 @@ func (s *webServer) putProfile(w http.ResponseWriter, r *http.Request, name stri
 	got, _, _ := config.LoadProfileIn(s.dir, name)
 	gotMeta, _, _ := config.LoadMetaIn(s.dir, name)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "name": name, "profile": got.RedactedView(), "meta": gotMeta,
+		"ok": true, "name": name, "profile": redactedProfileView(s.dir, name, got), "meta": gotMeta,
 	})
 }
 
@@ -165,6 +170,7 @@ func (s *webServer) deleteProfile(w http.ResponseWriter, r *http.Request, name s
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
+	_ = persistProfilePassword(s.dir, name, &config.Profile{}, true)
 	_ = config.DeleteMetaIn(s.dir, name)
 	s.note("web.profile.delete", "high-risk-write", name, true, "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": name})

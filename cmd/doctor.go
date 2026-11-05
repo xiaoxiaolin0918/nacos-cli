@@ -22,6 +22,7 @@ Never prints passwords or raw tokens.`,
 			}
 			checks := []check{}
 			healthy := true
+			rem := a.rememberedStatus()
 			report := map[string]any{
 				"version":          version.Version,
 				"server":           a.settings.Server,
@@ -29,6 +30,9 @@ Never prints passwords or raw tokens.`,
 				"username_env":     a.settings.Username,
 				"has_password_env": a.settings.Password != "",
 				"credentials":      credstore.Status(a.credPath),
+				"remembered":       rem,
+				"auto_renew":       a.autoLogin,
+				"can_auto_login":   rem["can_auto_login"],
 				"base_url":         a.settings.BaseURL(),
 			}
 			if a.settings.Server == "" {

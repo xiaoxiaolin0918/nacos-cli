@@ -27,7 +27,7 @@ func TestWebLangFromAcceptLanguage(t *testing.T) {
 }
 
 func TestFormHTMLChineseLightCard(t *testing.T) {
-	h := formHTML("http://nacos.example:8848", "nacos", "", "zh")
+	h := formHTML("http://nacos.example:8848", "nacos", "", "zh", false)
 	for _, want := range []string{
 		"登录", "用户名", "密码", "目标",
 		"密码仅留在本表单",
@@ -47,7 +47,7 @@ func TestFormHTMLChineseLightCard(t *testing.T) {
 }
 
 func TestFormHTMLEnglishLightCard(t *testing.T) {
-	h := formHTML("http://nacos.example:8848", "nacos", "", "en")
+	h := formHTML("http://nacos.example:8848", "nacos", "", "en", false)
 	for _, want := range []string{
 		"Login", "Username", "Password", "Target",
 		"Password stays in this form", "Sign in",
@@ -66,7 +66,7 @@ func TestFormHTMLEnglishLightCard(t *testing.T) {
 }
 
 func TestFormHTMLEscapesAndShowsError(t *testing.T) {
-	h := formHTML("http://x\"><script>", "u\"><x", "err<script>", "en")
+	h := formHTML("http://x\"><script>", "u\"><x", "err<script>", "en", false)
 	if strings.Contains(h, "<script>") {
 		t.Fatal("unescaped script in formHTML")
 	}
@@ -79,7 +79,7 @@ func TestFormHTMLEscapesAndShowsError(t *testing.T) {
 }
 
 func TestOkHTMLChineseAndEnglish(t *testing.T) {
-	zh := okHTML("http://nacos.example", "token", "zh")
+	zh := okHTML("http://nacos.example", "token", "zh", false, nil)
 	for _, want := range []string{"登录已保存", "服务器", "认证模式", "可关闭此标签页", "card", "token"} {
 		if !strings.Contains(zh, want) {
 			t.Errorf("zh ok missing %q", want)
@@ -89,7 +89,7 @@ func TestOkHTMLChineseAndEnglish(t *testing.T) {
 		t.Fatal("zh ok should not show English title")
 	}
 
-	en := okHTML("http://nacos.example", "token", "en")
+	en := okHTML("http://nacos.example", "token", "en", false, nil)
 	for _, want := range []string{"Login saved", "Server", "Auth mode", "close this tab", "card", "#1677ff"} {
 		if !strings.Contains(en, want) {
 			t.Errorf("en ok missing %q", want)
@@ -126,7 +126,7 @@ func TestFailHTMLChineseAndEnglish(t *testing.T) {
 }
 
 func TestOkHTMLEscapes(t *testing.T) {
-	h := okHTML("s\"><x", "m\"><y", "en")
+	h := okHTML("s\"><x", "m\"><y", "en", false, nil)
 	if strings.Contains(h, "s\"><x") || strings.Contains(h, "m\"><y") {
 		t.Fatal("raw injection payload still present in okHTML")
 	}

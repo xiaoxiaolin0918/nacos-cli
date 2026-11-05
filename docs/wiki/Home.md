@@ -10,7 +10,7 @@ Go 主实现；仓库入口见根目录 `README.md` / `AGENTS.md`。
 | 写门禁 | `--dry-run` 或 `--yes`（缺省 exit 10） |
 | 输出 | `--format json\|pretty`（默认 json）；`--output` 为别名 |
 | Profile | `~/.nacos-cli/<name>.conf`；`--profile` / `--config` |
-| 鉴权 | `auth login` / `--web`；token 落本机 credentials.json |
+| 鉴权 | `auth login [--remember]` / `--web`；token→credentials.json；可选加密 login.cred（Win=DPAPI / 其它 AES+login.key）+ `--auto-login`（401 续一次）；`logout` 默认只清 token，`--forget` 才双清（含 `.login/<profile>`） |
 | 归档 | Python v0 → `archive/python-v0` |
 
 示例主机只用 `http://127.0.0.1:8848`，不要在公开文档写实验室 IP。

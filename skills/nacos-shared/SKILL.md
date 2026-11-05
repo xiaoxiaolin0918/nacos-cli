@@ -1,7 +1,7 @@
 ---
 name: nacos-shared
-version: 0.3.0
-description: "Use for nacos-cli (Go) setup/auth: auth login/status/logout (--web), whoami, doctor, .env + local credentials file, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output, repl/interactive shell, backup path/list/create. Risk: read (status/doctor) | write (login)."
+version: 0.3.4
+description: "Use for nacos-cli (Go) setup/auth: auth login [--remember]/status/logout [--forget], --auto-login, whoami, doctor, .env + credentials.json + optional encrypted login.cred, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output, repl/interactive shell, backup path/list/create. Risk: read (status/doctor) | write (login)."
 metadata:
   requires:
     bins: ["nacos", "go"]
@@ -18,6 +18,18 @@ Read this before any other `nacos-*` skill. **Mainline is Go + cobra** (Python v
 - Running `auth login` (password flags or `--web` local browser form)
 - Checking session with `auth status` / `whoami` / `doctor`
 - Listing or reading bundled skills
+
+## Remember / auto-login / logout
+
+| Action | Effect |
+|--------|--------|
+| `auth login --remember` | Encrypt password into `login.cred` (Win=DPAPI; else AES+`login.key`). Opt-in. |
+| Web form uncheck「记住」 | Clears existing `login.cred` (same as remember=false). |
+| `--auto-login` / `NACOS_AUTO_LOGIN=1` | Default off. On HTTP 401 (token expiry), silent login **once**, write back token, replay (read+write). |
+| `auth logout` | Clears **token only** (`credentials.json`). Keeps `login.cred`. |
+| `auth logout --forget` | Double-clear: credentials-dir `login.cred`/`login.key` **and** current `--profile` `~/.nacos-cli/.login/<name>/`. |
+
+Never put passwords in profile YAML. Prefer `auth login --remember`. Failure hint: `auto-login failed: …; run: nacos auth login --remember`.
 
 ## Do NOT
 
@@ -49,9 +61,12 @@ Success stdout JSON `{ok,result}`. Failures on stderr; never print raw token (on
 ```powershell
 .\nacos.ps1 doctor
 .\nacos.ps1 auth login --web
+.\nacos.ps1 auth login --remember
+.\nacos.ps1 --auto-login namespace list
 .\nacos.ps1 auth status
 .\nacos.ps1 whoami --probe
 .\nacos.ps1 auth logout
+.\nacos.ps1 auth logout --forget
 .\nacos.ps1 skills list
 .\nacos.ps1 skills read nacos-shared
 ```
@@ -73,7 +88,7 @@ Success stdout JSON `{ok,result}`. Failures on stderr; never print raw token (on
 .\nacos.ps1 profile show lab
 ```
 
-- Profiles: `~/.nacos-cli/<name>.conf` (YAML). Never commit. `profile show` masks password.
+- Profiles: `~/.nacos-cli/<name>.conf` (YAML). Never commit. No plaintext passwords (use `--remember` / `.login/<name>`). `profile show` masks password.
 - Priority: flags > `--config` > `--profile` > env/.env.
 - `--output` aliases `--format` (`json` default, `pretty` optional).
 ## Failure strategy
