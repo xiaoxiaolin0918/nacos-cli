@@ -1,14 +1,14 @@
 {
   "name": "nacos",
   "bin": "nacos.exe",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "envelope": "ok-json",
   "status": "registered",
   "skills": "skills",
   "docs": "docs",
   "ui": null,
   "doctor": ["doctor"],
-  "update": null,
+  "update": "https://github.com/xiaoxiaolin0918/nacos-cli/releases/latest",
   "risk_default": "read",
   "supports_dry_run": true,
   "supports_yes": true
