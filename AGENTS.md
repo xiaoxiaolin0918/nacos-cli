@@ -47,6 +47,7 @@ Profiles live **outside** the repo: `~/.nacos-cli/<name>.conf` (YAML). Never com
 | `role` | `list` `bind` `unbind` |
 | `permission` | `list` `grant` `revoke` |
 | `auth` | `login` `logout` `status` (password or `--web`) |
+| `web` | Local loopback console: profiles + meta + audit (`127.0.0.1` only) |
 | `whoami` / `doctor` | read-only session / connectivity |
 | `profile` | `list` `show` `path` `set` `delete` |
 | `skills` | `list` `read` `path` |

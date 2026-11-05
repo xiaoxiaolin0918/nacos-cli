@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/xiaoxiaolin0918/nacos-cli/internal/audit"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/client"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/config"
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/credstore"
@@ -38,6 +39,7 @@ type App struct {
 	profileName string
 	profile     config.Profile
 	configFile  string
+	auditStore  *audit.Store
 }
 
 func Main() int {
@@ -113,6 +115,7 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 		a.newProfileCmd(),
 		a.newBackupCmd(),
 		a.newReplCmd(),
+		a.newWebCmd(),
 	)
 	silence(root)
 	return root
@@ -159,7 +162,7 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 	}
 	a.configFile = strings.TrimSpace(a.flagConfig)
 
-	if isSkillsCommand(cmd) || isProfileCommand(cmd) || cmd.Name() == "help" {
+	if isSkillsCommand(cmd) || isProfileCommand(cmd) || isWebCommand(cmd) || cmd.Name() == "help" {
 		// Still resolve format for JSON envelope on profile commands.
 		if err := a.resolveFormat(cmd, config.Profile{}); err != nil {
 			return a.fail(cmd, "", err)
@@ -268,6 +271,7 @@ func (a *App) write(cmd *cobra.Command, env output.Envelope) error {
 }
 
 func (a *App) ok(cmd *cobra.Command, v any) error {
+	a.recordOutcome(cmd.CommandPath(), cmdRisk(cmd), true, "")
 	return a.write(cmd, output.Envelope{OK: true, Result: output.MustResult(v)})
 }
 
@@ -276,6 +280,11 @@ func (a *App) fail(cmd *cobra.Command, level string, err error) error {
 	if level != "" {
 		body.Risk = level
 	}
+	riskLevel := level
+	if riskLevel == "" {
+		riskLevel = cmdRisk(cmd)
+	}
+	a.recordOutcome(cmd.CommandPath(), riskLevel, false, body.Message)
 	env := output.Envelope{OK: false, Error: body, Risk: level}
 	if werr := a.write(cmd, env); werr != nil {
 		return werr

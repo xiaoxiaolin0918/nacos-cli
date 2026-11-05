@@ -42,9 +42,10 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc(formPath, func(w http.ResponseWriter, r *http.Request) {
+		lang := webLang(r.Header.Get("Accept-Language"))
 		switch r.Method {
 		case http.MethodGet:
-			body := formHTML(a.settings.BaseURL(), a.settings.Username, "")
+			body := formHTML(a.settings.BaseURL(), a.settings.Username, "", lang)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			_, _ = io.WriteString(w, body)
@@ -56,7 +57,7 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 			res, err := a.client.Login(r.Context(), user, pass)
 			if err != nil {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				_, _ = io.WriteString(w, failHTML(err.Error()))
+				_, _ = io.WriteString(w, failHTML(err.Error(), lang))
 				once.Do(func() { ch <- outcome{err: err} })
 				return
 			}
@@ -69,12 +70,12 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 			}
 			if err := credstore.Save(a.credPath, cred); err != nil {
 				w.Header().Set("Content-Type", "text/html; charset=utf-8")
-				_, _ = io.WriteString(w, failHTML(err.Error()))
+				_, _ = io.WriteString(w, failHTML(err.Error(), lang))
 				once.Do(func() { ch <- outcome{err: err} })
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			_, _ = io.WriteString(w, okHTML(a.settings.Server, res.AuthMode))
+			_, _ = io.WriteString(w, okHTML(a.settings.Server, res.AuthMode, lang))
 			once.Do(func() {
 				ch <- outcome{user: user, res: map[string]any{"auth_mode": res.AuthMode, "has_token": res.HasToken}}
 			})
@@ -103,7 +104,7 @@ func (a *App) runWebLogin(cmd *cobra.Command) error {
 	}()
 
 	_ = openBrowser(formURL)
-	fmt.Fprintf(cmd.ErrOrStderr(), "Open %s if the browser did not launch\n", formURL)
+	fmt.Fprintf(cmd.ErrOrStderr(), "若浏览器未打开请访问 / Open %s if the browser did not launch\n", formURL)
 
 	select {
 	case out := <-ch:
@@ -123,49 +124,100 @@ func errorsTimeout() error {
 	return &strErr{s: "web login timed out; local listener closed"}
 }
 
-func formHTML(serverHint, username, errMsg string) string {
+// webLang picks "zh" when Accept-Language mentions a Chinese tag; otherwise "en".
+func webLang(acceptLanguage string) string {
+	low := strings.ToLower(acceptLanguage)
+	if strings.Contains(low, "zh") {
+		return "zh"
+	}
+	return "en"
+}
+
+const webLoginCSS = `
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+background:#f5f7fa;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1f1f1f}
+.card{background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.08);
+padding:28px 28px 24px;width:100%;max-width:420px;margin:24px}
+h1{font-size:1.35rem;margin:0 0 12px;font-weight:600}
+.hint{color:#64748b;font-size:13px;margin:0 0 8px;line-height:1.45}
+label{display:block;margin:14px 0 6px;font-size:14px;font-weight:500}
+input{width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px}
+input:focus{outline:none;border-color:#1677ff;box-shadow:0 0 0 2px rgba(22,119,255,.15)}
+button.primary{margin-top:20px;width:100%;padding:11px 16px;border:0;border-radius:8px;
+background:#1677ff;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+button.primary:hover{background:#4096ff}
+.err{color:#b00020;background:#fff2f0;border:1px solid #ffccc7;border-radius:8px;
+padding:10px 12px;margin:12px 0;font-size:13px}
+code{font-size:12px;word-break:break-all}
+`
+
+func formHTML(serverHint, username, errMsg, lang string) string {
+	title, target, passHint, userLabel, passLabel, submit :=
+		"nacos-cli Login", "Target", "Password stays in this form; the CLI never prints it.",
+		"Username", "Password", "Sign in"
+	if lang == "zh" {
+		title, target, passHint, userLabel, passLabel, submit =
+			"nacos-cli 登录", "目标", "密码仅留在本表单；CLI 不会打印密码。",
+			"用户名", "密码", "登录"
+	}
 	errBlock := ""
 	if errMsg != "" {
-		errBlock = `<p style="color:#b00020">` + html.EscapeString(errMsg) + `</p>`
+		errBlock = `<p class="err">` + html.EscapeString(errMsg) + `</p>`
 	}
 	return `<!doctype html>
-<html><head><meta charset="utf-8"><title>nacos-cli login</title>
-<style>
-body{font-family:system-ui,sans-serif;max-width:420px;margin:40px auto;padding:0 16px}
-label{display:block;margin:12px 0 4px}
-input{width:100%;padding:8px;box-sizing:border-box}
-button{margin-top:16px;padding:10px 16px}
-.hint{color:#555;font-size:13px}
-</style></head><body>
-<h1>nacos-cli web login</h1>
-<p class="hint">Target: <code>` + html.EscapeString(serverHint) + `</code></p>
-<p class="hint">Password stays in this form; the CLI never prints it.</p>
+<html lang="` + html.EscapeString(lang) + `"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>` + html.EscapeString(title) + `</title>
+<style>` + webLoginCSS + `</style></head><body>
+<div class="card">
+<h1>` + html.EscapeString(title) + `</h1>
+<p class="hint">` + html.EscapeString(target) + `: <code>` + html.EscapeString(serverHint) + `</code></p>
+<p class="hint">` + html.EscapeString(passHint) + `</p>
 ` + errBlock + `
 <form method="POST">
-<label>Username</label>
+<label>` + html.EscapeString(userLabel) + `</label>
 <input name="username" value="` + html.EscapeString(username) + `" autocomplete="username" required>
-<label>Password</label>
+<label>` + html.EscapeString(passLabel) + `</label>
 <input name="password" type="password" autocomplete="current-password">
-<button type="submit">Sign in</button>
+<button class="primary" type="submit">` + html.EscapeString(submit) + `</button>
 </form>
+</div>
 </body></html>`
 }
 
-func okHTML(server, authMode string) string {
-	return `<!doctype html><html><head><meta charset="utf-8"><title>nacos-cli login ok</title></head>
-<body style="font-family:system-ui;margin:40px">
-<h1>Login saved</h1>
-<p>Server: <code>` + html.EscapeString(server) + `</code></p>
-<p>Auth mode: <code>` + html.EscapeString(authMode) + `</code></p>
-<p>You can close this tab.</p>
+func okHTML(server, authMode, lang string) string {
+	title, serverL, modeL, closeHint :=
+		"Login saved", "Server", "Auth mode", "You can close this tab."
+	if lang == "zh" {
+		title, serverL, modeL, closeHint =
+			"登录已保存", "服务器", "认证模式", "可关闭此标签页。"
+	}
+	return `<!doctype html>
+<html lang="` + html.EscapeString(lang) + `"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>` + html.EscapeString(title) + `</title>
+<style>` + webLoginCSS + `</style></head><body>
+<div class="card">
+<h1>` + html.EscapeString(title) + `</h1>
+<p class="hint">` + html.EscapeString(serverL) + `: <code>` + html.EscapeString(server) + `</code></p>
+<p class="hint">` + html.EscapeString(modeL) + `: <code>` + html.EscapeString(authMode) + `</code></p>
+<p class="hint">` + html.EscapeString(closeHint) + `</p>
+</div>
 </body></html>`
 }
 
-func failHTML(message string) string {
-	return `<!doctype html><html><head><meta charset="utf-8"><title>nacos-cli login failed</title></head>
-<body style="font-family:system-ui;margin:40px">
-<h1>Login failed</h1>
-<p style="color:#b00020">` + html.EscapeString(message) + `</p>
+func failHTML(message, lang string) string {
+	title := "Login failed"
+	if lang == "zh" {
+		title = "登录失败"
+	}
+	return `<!doctype html>
+<html lang="` + html.EscapeString(lang) + `"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>` + html.EscapeString(title) + `</title>
+<style>` + webLoginCSS + `</style></head><body>
+<div class="card">
+<h1>` + html.EscapeString(title) + `</h1>
+<p class="err">` + html.EscapeString(message) + `</p>
+</div>
 </body></html>`
 }
 

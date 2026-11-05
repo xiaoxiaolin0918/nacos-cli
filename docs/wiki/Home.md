@@ -36,3 +36,10 @@ Go 主实现；仓库入口见根目录 `README.md` / `AGENTS.md`。
 
 本地备份目录默认 `./backups`（可用 `NACOS_BACKUP_DIR`），已 gitignore。REPL 内写操作仍需 `--dry-run` / `--yes`。
 
+## 本地监管 Web
+
+```text
+nacos web
+```
+
+仅绑定 `127.0.0.1`。可管理 `~/.nacos-cli/*.conf` 连接字段与 `*.meta.yaml` 备注（备注名 / lab|prod / 颜色 / 负责人 / 注意事项），并浏览 `~/.nacos-cli/audit.jsonl` 操作记录。不通过 Web 直接改远端 Nacos。密码在页面上永不回显明文。
