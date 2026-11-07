@@ -18,3 +18,9 @@ func (e *PrintedError) ExitCode() int {
 }
 
 var _ = risk.ExitConfirmationRequired
+
+// SilentSuccess means stdout was already written; process should exit 0.
+type SilentSuccess struct{}
+
+func (SilentSuccess) Error() string { return "" }
+func (SilentSuccess) ExitCode() int { return 0 }

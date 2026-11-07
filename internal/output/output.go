@@ -10,21 +10,22 @@ import (
 )
 
 type Envelope struct {
-	OK           bool              `json:"ok"`
-	DryRun       bool              `json:"dry_run,omitempty"`
-	Risk         string            `json:"risk,omitempty"`
-	Error        any               `json:"error,omitempty"`
-	Hint         string            `json:"hint,omitempty"`
-	Method       string            `json:"method,omitempty"`
-	URL          string            `json:"url,omitempty"`
-	Would        map[string]any    `json:"would,omitempty"`
-	WouldRequire []string          `json:"would_require,omitempty"`
-	Result       json.RawMessage   `json:"result,omitempty"`
+	OK           bool            `json:"ok"`
+	DryRun       bool            `json:"dry_run,omitempty"`
+	Risk         string          `json:"risk,omitempty"`
+	Error        any             `json:"error,omitempty"`
+	Hint         string          `json:"hint,omitempty"`
+	Method       string          `json:"method,omitempty"`
+	URL          string          `json:"url,omitempty"`
+	Would        map[string]any  `json:"would,omitempty"`
+	WouldRequire []string        `json:"would_require,omitempty"`
+	Result       json.RawMessage `json:"result,omitempty"`
 }
 
 type ErrorBody struct {
 	Type    string `json:"type"`
 	Subtype string `json:"subtype,omitempty"`
+	Code    string `json:"code,omitempty"`
 	Message string `json:"message"`
 	Hint    string `json:"hint,omitempty"`
 	Risk    string `json:"risk,omitempty"`

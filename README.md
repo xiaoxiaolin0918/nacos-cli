@@ -189,3 +189,14 @@ This ops CLI differentiates with naming up/down, ACL, `--yes`/`--dry-run` gates,
 - Under Git Bash, path conversion may rewrite --context-path /nacos. Use:
   `MSYS_NO_PATHCONV=1 nacos profile set lab --context-path /nacos`
   Invalid filesystem-looking values are rejected at profile write time.
+
+## Self-update
+
+```powershell
+.
+acos.exe update --check
+.
+acos.exe update --yes
+```
+
+Optional (default **off**): `--check-update` / `NACOS_CHECK_UPDATE=1` for stderr new-version hints; `--auto-update` / `NACOS_AUTO_UPDATE=1` for silent replace. Agent capability dump: `nacos commands` or `nacos --help-json`.

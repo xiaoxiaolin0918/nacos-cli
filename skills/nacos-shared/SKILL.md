@@ -1,6 +1,6 @@
 ---
 name: nacos-shared
-version: 0.3.4
+version: 0.3.5
 description: "Use for nacos-cli (Go) setup/auth: auth login [--remember]/status/logout [--forget], --auto-login, whoami, doctor, .env + credentials.json + optional encrypted login.cred, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output, repl/interactive shell, backup path/list/create. Risk: read (status/doctor) | write (login)."
 metadata:
   requires:
@@ -109,3 +109,9 @@ Success stdout JSON `{ok,result}`. Failures on stderr; never print raw token (on
 | Unix | `$XDG_CONFIG_HOME/nacos-cli/credentials.json` or `~/.config/nacos-cli/credentials.json` |
 
 Override: `NACOS_CREDENTIALS_PATH`.
+
+## Update
+
+- `nacos update --check|--yes`
+- Optional: `--check-update` / `--auto-update` (default off; see docs/wiki/Update.md)
+- `nacos commands` / `--help-json` for risk table; errors carry `error.code`

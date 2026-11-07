@@ -30,3 +30,20 @@ func TestScrub(t *testing.T) {
 		t.Fatal(string(raw))
 	}
 }
+func TestErrorBodyCode(t *testing.T) {
+	env := Envelope{OK: false, Error: ErrorBody{
+		Type: "confirmation", Subtype: "confirmation_required",
+		Code: CodeConfirmationRequired, Message: "need --yes",
+	}}
+	var buf bytes.Buffer
+	if err := Write(&buf, "json", env, nil); err != nil {
+		t.Fatal(err)
+	}
+	s := buf.String()
+	if !strings.Contains(s, `"code":"confirmation_required"`) {
+		t.Fatalf("%s", s)
+	}
+	if HTTPCode(401) != "http_401" || HTTPCode(403) != "http_403" {
+		t.Fatalf("HTTPCode")
+	}
+}

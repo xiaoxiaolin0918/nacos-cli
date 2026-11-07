@@ -114,3 +114,11 @@ go build -o nacos.exe .
 ## Official CLI note
 
 Borrow from [`nacos-group/nacos-cli`](https://github.com/nacos-group/nacos-cli) selectively (see `docs/pdca.md`). Keep our naming up/down + ACL + gates as differentiators. Do not wholesale rewrite the command surface.
+
+## Update & Agent surface
+
+- `nacos update --check` / `nacos update --yes` — GitHub Releases self-update (SHA-256 via digest or checksums.txt).
+- Background check **off** by default: `--check-update` / `NACOS_CHECK_UPDATE` / profile `check_update` → stderr hint only (24h cache).
+- Silent replace **off** by default: `--auto-update` / `NACOS_AUTO_UPDATE` / profile `auto_update` (implies check; rollback on failure).
+- `nacos commands` or `nacos --help-json` — capability table (path, risk, needs_yes, dry-run).
+- Failure envelope includes stable `error.code` (see `docs/wiki/Errors.md`).

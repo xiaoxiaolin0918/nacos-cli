@@ -33,6 +33,8 @@ Never prints passwords or raw tokens.`,
 				"remembered":       rem,
 				"auto_renew":       a.autoLogin,
 				"can_auto_login":   rem["can_auto_login"],
+				"check_update":     a.checkUpdateEnabled,
+				"auto_update":      a.autoUpdateEnabled,
 				"base_url":         a.settings.BaseURL(),
 			}
 			if a.settings.Server == "" {
@@ -40,7 +42,7 @@ Never prints passwords or raw tokens.`,
 				checks = append(checks, check{Name: "server", OK: false, Detail: "NACOS_SERVER not set"})
 				report["checks"] = checks
 				report["ok"] = false
-				env := output.Envelope{OK: false, Result: output.MustResult(report), Error: output.ErrorBody{Type: "cli", Message: "NACOS_SERVER not set"}}
+				env := output.Envelope{OK: false, Result: output.MustResult(report), Error: output.ErrorBody{Type: "cli", Code: output.CodeServerUnset, Message: "NACOS_SERVER not set"}}
 				if err := a.write(cmd, env); err != nil {
 					return err
 				}
@@ -92,7 +94,7 @@ Never prints passwords or raw tokens.`,
 			report["ok"] = healthy
 			env := output.Envelope{OK: healthy, Result: output.MustResult(report)}
 			if !healthy {
-				env.Error = output.ErrorBody{Type: "cli", Message: "doctor found a failing check"}
+				env.Error = output.ErrorBody{Type: "cli", Code: output.CodeDoctorFailed, Message: "doctor found a failing check"}
 				if err := a.write(cmd, env); err != nil {
 					return err
 				}
@@ -101,7 +103,25 @@ Never prints passwords or raw tokens.`,
 			return a.write(cmd, env)
 		},
 	}
+	var checkUpdate bool
+	cmd.Flags().BoolVar(&checkUpdate, "check-update", false, "also query GitHub Releases for a newer binary (best-effort)")
 	mark(cmd, risk.Read, "Check connectivity and credentials")
+	inner := cmd.RunE
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		err := inner(c, args)
+		if !checkUpdate && !a.checkUpdateEnabled {
+			return err
+		}
+		res, uerr := a.checkUpdate(c)
+		if uerr != nil {
+			c.PrintErrf("nacos: update check failed: %v\n", uerr)
+			return err
+		}
+		if res != nil && res.Status == "outdated" {
+			c.PrintErrf("nacos: newer version %s available (current %s); run: nacos update --yes\n", res.Latest, res.Current)
+		}
+		return err
+	}
 	return cmd
 }
 

@@ -28,6 +28,8 @@ type Profile struct {
 	Namespace   string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
 	ContextPath string `yaml:"contextPath,omitempty" json:"contextPath,omitempty"`
 	Format      string `yaml:"format,omitempty" json:"format,omitempty"`
+	CheckUpdate bool   `yaml:"check_update,omitempty" json:"check_update,omitempty"`
+	AutoUpdate  bool   `yaml:"auto_update,omitempty" json:"auto_update,omitempty"`
 }
 
 var profileNameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
@@ -277,6 +279,8 @@ func (p Profile) RedactedView() map[string]any {
 		"namespace":    p.Namespace,
 		"contextPath":  p.ContextPath,
 		"format":       p.Format,
+		"check_update": p.CheckUpdate,
+		"auto_update":  p.AutoUpdate,
 		"password_set": p.Password != "",
 	}
 }

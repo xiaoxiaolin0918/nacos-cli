@@ -18,30 +18,35 @@ import (
 )
 
 type App struct {
-	flagServer    string
-	flagUsername  string
-	flagFormat    string
-	flagOutput    string
-	flagDryRun    bool
-	flagYes       bool
-	flagTimeout   string
-	flagConfig    string
-	flagProfile   string
-	flagNS        string
-	flagAutoLogin bool
+	flagServer      string
+	flagUsername    string
+	flagFormat      string
+	flagOutput      string
+	flagDryRun      bool
+	flagYes         bool
+	flagTimeout     string
+	flagConfig      string
+	flagProfile     string
+	flagNS          string
+	flagAutoLogin   bool
+	flagCheckUpdate bool
+	flagAutoUpdate  bool
+	flagHelpJSON    bool
 
-	settings    config.Settings
-	format      string
-	dryRun      bool
-	yes         bool
-	autoLogin   bool
-	client      *client.Client
-	credPath    string
-	secrets     []string
-	profileName string
-	profile     config.Profile
-	configFile  string
-	auditStore  *audit.Store
+	settings           config.Settings
+	format             string
+	dryRun             bool
+	yes                bool
+	autoLogin          bool
+	checkUpdateEnabled bool
+	autoUpdateEnabled  bool
+	client             *client.Client
+	credPath           string
+	secrets            []string
+	profileName        string
+	profile            config.Profile
+	configFile         string
+	auditStore         *audit.Store
 }
 
 func Main() int {
@@ -50,9 +55,10 @@ func Main() int {
 	if err == nil {
 		return 0
 	}
-	var pe *PrintedError
-	if errors.As(err, &pe) {
-		return pe.ExitCode()
+	type exitCoder interface{ ExitCode() int }
+	var ec exitCoder
+	if errors.As(err, &ec) {
+		return ec.ExitCode()
 	}
 	fmt.Fprintln(os.Stderr, "Error:", err)
 	return 1
@@ -90,7 +96,12 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 	}
 	root.SetVersionTemplate("{\"ok\":true,\"result\":{\"name\":\"nacos-cli\",\"version\":\"{{.Version}}\"}}\n")
 	root.CompletionOptions.DisableDefaultCmd = true
-	root.PersistentPreRunE = a.resolve
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		if a.flagHelpJSON {
+			return a.emitHelpJSON(cmd)
+		}
+		return a.resolve(cmd, args)
+	}
 
 	p := root.PersistentFlags()
 	p.StringVar(&a.flagServer, "server", "", "Nacos server root, e.g. http://127.0.0.1:8848 (env NACOS_SERVER)")
@@ -104,6 +115,9 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 	p.BoolVarP(&a.flagYes, "yes", "y", false, "confirm a high-risk write")
 	p.BoolVar(&a.flagAutoLogin, "auto-login", false, "on HTTP 401 or token-expiry 403, silent login once from NACOS_USERNAME+PASSWORD or encrypted login.cred and replay (env NACOS_AUTO_LOGIN=1); alias: --auto-renew")
 	p.BoolVar(&a.flagAutoLogin, "auto-renew", false, "alias of --auto-login")
+	p.BoolVar(&a.flagCheckUpdate, "check-update", false, "opportunistic background update check (env NACOS_CHECK_UPDATE=1; profile check_update); stderr hint only")
+	p.BoolVar(&a.flagAutoUpdate, "auto-update", false, "when check-update finds a newer release, silently download/replace (env NACOS_AUTO_UPDATE=1; profile auto_update); default off")
+	p.BoolVar(&a.flagHelpJSON, "help-json", false, "print command capability JSON (same as: nacos commands) and exit")
 
 	root.AddCommand(
 		a.newConfigCmd(),
@@ -120,8 +134,11 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 		a.newBackupCmd(),
 		a.newReplCmd(),
 		a.newWebCmd(),
+		a.newUpdateCmd(),
+		a.newCommandsCmd(),
 	)
 	silence(root)
+	attachBackgroundUpdateHook(root, a)
 	return root
 }
 
@@ -166,11 +183,12 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 	}
 	a.configFile = strings.TrimSpace(a.flagConfig)
 
-	if isSkillsCommand(cmd) || isProfileCommand(cmd) || isWebCommand(cmd) || cmd.Name() == "help" {
-		// Still resolve format for JSON envelope on profile commands.
+	if isSkillsCommand(cmd) || isProfileCommand(cmd) || isWebCommand(cmd) || isUpdateCommand(cmd) || isCommandsCommand(cmd) || cmd.Name() == "help" || cmd.Name() == "commands" || cmd.Name() == "update" {
+		// Still resolve format for JSON envelope on profile/update/commands.
 		if err := a.resolveFormat(cmd, config.Profile{}); err != nil {
 			return a.fail(cmd, "", err)
 		}
+		a.resolveUpdateFlags(config.Profile{})
 		return nil
 	}
 
@@ -240,6 +258,7 @@ func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 		}
 	}
 	a.wireAutoRenew()
+	a.resolveUpdateFlags(a.profile)
 	return nil
 }
 
@@ -288,10 +307,18 @@ func (a *App) ok(cmd *cobra.Command, v any) error {
 }
 
 func (a *App) fail(cmd *cobra.Command, level string, err error) error {
-	body := output.ErrorBody{Type: "cli", Message: err.Error()}
-	if level != "" {
-		body.Risk = level
+	return a.failBody(cmd, level, classifyError(err, level))
+}
+
+func (a *App) failCoded(cmd *cobra.Command, level, code string, err error) error {
+	body := classifyError(err, level)
+	if code != "" {
+		body.Code = code
 	}
+	return a.failBody(cmd, level, body)
+}
+
+func (a *App) failBody(cmd *cobra.Command, level string, body output.ErrorBody) error {
 	riskLevel := level
 	if riskLevel == "" {
 		riskLevel = cmdRisk(cmd)
@@ -308,6 +335,7 @@ func (a *App) failConfirmation(cmd *cobra.Command, g risk.GateResult) error {
 	body := output.ErrorBody{
 		Type:    "confirmation",
 		Subtype: "confirmation_required",
+		Code:    output.CodeConfirmationRequired,
 		Message: g.Error(),
 		Hint:    g.Hint,
 		Risk:    g.Risk,

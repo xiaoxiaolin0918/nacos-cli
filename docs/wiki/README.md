@@ -6,3 +6,5 @@
 |------|------|
 | [Home.md](Home.md) | 总览与快速入口 |
 | [../pdca.md](../pdca.md) | 当前 Plan/Do/Check/Act 与缺口 |
+| [Update.md](Update.md) | update / check-update / auto-update |
+| [Errors.md](Errors.md) | 稳定 error.code |
