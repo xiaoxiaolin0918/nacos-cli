@@ -1,7 +1,7 @@
 {
   "name": "nacos",
   "bin": "nacos.exe",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "envelope": "ok-json",
   "status": "registered",
   "skills": "skills",
@@ -15,5 +15,25 @@
   ],
   "risk_default": "read",
   "supports_dry_run": true,
-  "supports_yes": true
+  "supports_yes": true,
+  "capabilities": {
+    "schema_version": 1,
+    "envelope": "ok-json",
+    "would": "array",
+    "redact_fields": [
+      "password",
+      "passwd",
+      "secret",
+      "accessToken",
+      "access_token",
+      "token",
+      "refresh_token",
+      "refreshToken"
+    ],
+    "trace": true,
+    "examples": true,
+    "list_limit_query": true,
+    "help_json": true,
+    "error_code": true
+  }
 }

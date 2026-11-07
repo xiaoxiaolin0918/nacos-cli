@@ -40,7 +40,7 @@ Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
 			if a.dryRun {
 				return a.write(cmd, output.Envelope{
 					OK: true, DryRun: true, Risk: risk.Write,
-					Would: map[string]any{"action": "auth.login", "web": web || browser, "server": a.settings.Server, "remember": store},
+					Would: output.AsWould(map[string]any{"action": "auth.login", "web": web || browser, "server": a.settings.Server, "remember": store}),
 				})
 			}
 			if err := a.requireServer(cmd); err != nil {
@@ -60,9 +60,14 @@ Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
 			if pass == "" {
 				pass = a.settings.Password
 			}
-			if pass == "" {
+			if pass == "" && !cmd.Flags().Changed("password") {
 				p, err := promptPassword(cmd)
 				if err != nil {
+					// Non-TTY: never prompt. If username is set, require --password / NACOS_PASSWORD.
+					// Empty user+pass may still work for AUTH_DISABLED.
+					if !isInteractiveStdin(cmd) && strings.TrimSpace(user) != "" {
+						return a.failCoded(cmd, risk.Write, output.CodePasswordRequired, err)
+					}
 					pass = ""
 				} else {
 					pass = p
@@ -103,6 +108,16 @@ Password from --password, NACOS_PASSWORD, or a terminal prompt (never printed).
 	return cmd
 }
 
+
+func isInteractiveStdin(cmd *cobra.Command) bool {
+	in := cmd.InOrStdin()
+	f, ok := in.(*os.File)
+	if !ok {
+		return false
+	}
+	return term.IsTerminal(int(f.Fd()))
+}
+
 func promptPassword(cmd *cobra.Command) (string, error) {
 	in := cmd.InOrStdin()
 	f, ok := in.(*os.File)
@@ -139,7 +154,7 @@ double-clears; only --forget does.`,
 				"profile":                a.profileName,
 			}
 			if a.dryRun {
-				return a.write(cmd, output.Envelope{OK: true, DryRun: true, Risk: risk.Write, Would: would})
+				return a.write(cmd, output.Envelope{OK: true, DryRun: true, Risk: risk.Write, Would: output.AsWould(would)})
 			}
 			clearedToken := true
 			if err := credstore.Clear(a.credPath); err != nil {

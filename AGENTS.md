@@ -122,3 +122,12 @@ Borrow from [`nacos-group/nacos-cli`](https://github.com/nacos-group/nacos-cli) 
 - Silent replace **off** by default: `--auto-update` / `NACOS_AUTO_UPDATE` / profile `auto_update` (implies check; rollback on failure).
 - `nacos commands` or `nacos --help-json` — capability table (path, risk, needs_yes, dry-run).
 - Failure envelope includes stable `error.code` (see `docs/wiki/Errors.md`).
+
+## AI-friendly baseline (required)
+
+- Envelope: ok-json; dry-run `would` is an **array**; stable `error.code`.
+- Agent surfaces: `commands` / `--help-json`, `examples`, optional `--trace` meta.
+- List: `--limit` (alias of page-size) + `--query` where applicable.
+- Non-TTY: never password-prompt; missing password with username → `password_required`.
+- Manifest `capabilities.schema_version` + `redact_fields`. See `docs/wiki/AI.md`.
+

@@ -61,14 +61,16 @@ func (a *App) newConfigGetCmd() *cobra.Command {
 }
 
 func (a *App) newConfigListCmd() *cobra.Command {
-	var dataID, group, ns string
-	var page, pageSize int
+	var dataID, group, ns, query string
+	var page, pageSize, limit int
 	cmd := &cobra.Command{
 		Use: "list",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			applyLimitAlias(cmd, &pageSize, limit)
+			applyQueryFallback(&dataID, query)
 			eff := a.effectiveNS(ns)
 			uc := domain.ConfigUseCase{Port: a.client}
 			out, err := uc.List(domain.BlurPattern(dataID), domain.BlurPattern(group), eff, page, pageSize)
@@ -85,9 +87,9 @@ func (a *App) newConfigListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&dataID, "data-id", "", "blur dataId filter (auto-wrapped as *x* unless it contains *)")
 	cmd.Flags().StringVar(&group, "group", "", "blur group filter (auto-wrapped as *x* unless it contains *)")
+	cmd.Flags().StringVar(&query, "query", "", "Agent-friendly alias: fills --data-id when empty")
 	cmd.Flags().StringVar(&ns, "namespace", "", "tenant/namespace id")
-	cmd.Flags().IntVar(&page, "page", 1, "pageNo")
-	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize")
+	addListPageFlags(cmd, &page, &pageSize, &limit)
 	mark(cmd, risk.Read, "List configs")
 	return cmd
 }

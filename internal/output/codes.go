@@ -8,6 +8,8 @@ const (
 	CodeDoctorFailed         = "doctor_failed"
 	CodeUpdateFailed         = "update_failed"
 	CodeUnsupportedPlatform  = "unsupported_platform"
+	CodePasswordRequired     = "password_required"
+	CodeMissingFlag          = "missing_flag"
 )
 
 // HTTPCode returns "http_<status>" for a numeric HTTP status.

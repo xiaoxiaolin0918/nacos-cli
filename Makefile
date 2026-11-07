@@ -1,4 +1,4 @@
-VERSION ?= 0.3.5
+VERSION ?= 0.3.6
 PKG := github.com/xiaoxiaolin0918/nacos-cli
 LDFLAGS := -X $(PKG)/internal/version.Version=$(VERSION)
 

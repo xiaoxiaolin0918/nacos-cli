@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -32,6 +33,7 @@ type App struct {
 	flagCheckUpdate bool
 	flagAutoUpdate  bool
 	flagHelpJSON    bool
+	flagTrace       bool
 
 	settings           config.Settings
 	format             string
@@ -40,6 +42,10 @@ type App struct {
 	autoLogin          bool
 	checkUpdateEnabled bool
 	autoUpdateEnabled  bool
+	traceEnabled       bool
+	traceStart         time.Time
+	traceRenewed       bool
+	traceUpdateChecked bool
 	client             *client.Client
 	credPath           string
 	secrets            []string
@@ -118,6 +124,7 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 	p.BoolVar(&a.flagCheckUpdate, "check-update", false, "opportunistic background update check (env NACOS_CHECK_UPDATE=1; profile check_update); stderr hint only")
 	p.BoolVar(&a.flagAutoUpdate, "auto-update", false, "when check-update finds a newer release, silently download/replace (env NACOS_AUTO_UPDATE=1; profile auto_update); default off")
 	p.BoolVar(&a.flagHelpJSON, "help-json", false, "print command capability JSON (same as: nacos commands) and exit")
+	p.BoolVar(&a.flagTrace, "trace", false, "attach envelope meta (duration_ms, renewed, update_checked); default off (env NACOS_TRACE=1)")
 
 	root.AddCommand(
 		a.newConfigCmd(),
@@ -136,6 +143,7 @@ Bare nacos on a TTY starts the interactive REPL (same as: nacos repl).`,
 		a.newWebCmd(),
 		a.newUpdateCmd(),
 		a.newCommandsCmd(),
+		a.newExamplesCmd(),
 	)
 	silence(root)
 	attachBackgroundUpdateHook(root, a)
@@ -177,13 +185,17 @@ func mark(cmd *cobra.Command, level, short string) {
 func (a *App) resolve(cmd *cobra.Command, _ []string) error {
 	a.dryRun = a.flagDryRun
 	a.yes = a.flagYes
+	a.traceEnabled = a.flagTrace || envTruthy("NACOS_TRACE")
+	if a.traceEnabled && a.traceStart.IsZero() {
+		a.traceStart = time.Now()
+	}
 	a.profileName = strings.TrimSpace(a.flagProfile)
 	if a.profileName == "" {
 		a.profileName = "default"
 	}
 	a.configFile = strings.TrimSpace(a.flagConfig)
 
-	if isSkillsCommand(cmd) || isProfileCommand(cmd) || isWebCommand(cmd) || isUpdateCommand(cmd) || isCommandsCommand(cmd) || cmd.Name() == "help" || cmd.Name() == "commands" || cmd.Name() == "update" {
+	if isSkillsCommand(cmd) || isProfileCommand(cmd) || isWebCommand(cmd) || isUpdateCommand(cmd) || isCommandsCommand(cmd) || isExamplesCommand(cmd) || cmd.Name() == "help" || cmd.Name() == "commands" || cmd.Name() == "update" || cmd.Name() == "examples" {
 		// Still resolve format for JSON envelope on profile/update/commands.
 		if err := a.resolveFormat(cmd, config.Profile{}); err != nil {
 			return a.fail(cmd, "", err)
@@ -294,6 +306,19 @@ func (a *App) track(secret string) {
 }
 
 func (a *App) write(cmd *cobra.Command, env output.Envelope) error {
+	if a.traceEnabled {
+		meta := map[string]any{"trace": true}
+		if !a.traceStart.IsZero() {
+			meta["duration_ms"] = time.Since(a.traceStart).Milliseconds()
+		}
+		if a.traceRenewed {
+			meta["renewed"] = true
+		}
+		if a.traceUpdateChecked {
+			meta["update_checked"] = true
+		}
+		env.Meta = meta
+	}
 	w := cmd.OutOrStdout()
 	if !env.OK {
 		w = cmd.ErrOrStderr()
@@ -350,19 +375,19 @@ func (a *App) failConfirmation(cmd *cobra.Command, g risk.GateResult) error {
 
 func (a *App) gateHigh(cmd *cobra.Command, action string, would map[string]any) (stop bool, err error) {
 	if a.dryRun {
+		item := would
+		if item == nil {
+			item = map[string]any{"action": action}
+		} else if _, ok := item["action"]; !ok {
+			item["action"] = action
+		}
 		env := output.Envelope{
-			OK:     true,
-			DryRun: true,
-			Risk:   risk.High,
-			Would:  would,
+			OK:           true,
+			DryRun:       true,
+			Risk:         risk.High,
+			Would:        output.AsWould(item),
+			WouldRequire: []string{"--yes"},
 		}
-		if would == nil {
-			env.Would = map[string]any{"action": action}
-		} else if _, ok := would["action"]; !ok {
-			would["action"] = action
-			env.Would = would
-		}
-		env.WouldRequire = []string{"--yes"}
 		if werr := a.write(cmd, env); werr != nil {
 			return true, werr
 		}

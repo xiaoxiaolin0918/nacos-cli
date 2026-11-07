@@ -3,6 +3,8 @@ package cmd
 import (
 	"strconv"
 
+	"strings"
+
 	"github.com/spf13/cobra"
 
 	"github.com/xiaoxiaolin0918/nacos-cli/internal/domain"
@@ -23,26 +25,28 @@ func (a *App) newServiceCmd() *cobra.Command {
 }
 
 func (a *App) newServiceListCmd() *cobra.Command {
-	var ns string
-	var page, pageSize int
+	var ns, query string
+	var page, pageSize, limit int
 	cmd := &cobra.Command{
 		Use: "list",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			applyLimitAlias(cmd, &pageSize, limit)
 			eff := a.effectiveNS(ns)
 			uc := domain.ServiceUseCase{Port: a.client}
 			out, err := uc.List(eff, page, pageSize)
 			if err != nil {
 				return a.fail(cmd, risk.Read, err)
 			}
+			out = filterServiceListByQuery(out, query)
 			return a.ok(cmd, out)
 		},
 	}
 	cmd.Flags().StringVar(&ns, "namespace", "", "namespace id")
-	cmd.Flags().IntVar(&page, "page", 1, "pageNo")
-	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize")
+	cmd.Flags().StringVar(&query, "query", "", "client-side substring filter on service name (Agent-friendly)")
+	addListPageFlags(cmd, &page, &pageSize, &limit)
 	mark(cmd, risk.Read, "List services")
 	return cmd
 }
@@ -230,3 +234,54 @@ func (a *App) newServiceDownCmd() *cobra.Command {
 }
 
 var _ = strconv.FormatBool
+
+
+func filterServiceListByQuery(out any, query string) any {
+	q := strings.TrimSpace(strings.ToLower(query))
+	if q == "" {
+		return out
+	}
+	m, ok := out.(map[string]any)
+	if !ok {
+		return out
+	}
+	for _, key := range []string{"doms", "services", "serviceList"} {
+		raw, ok := m[key]
+		if !ok {
+			continue
+		}
+		switch arr := raw.(type) {
+		case []any:
+			kept := make([]any, 0, len(arr))
+			for _, it := range arr {
+				name := ""
+				switch v := it.(type) {
+				case string:
+					name = v
+				case map[string]any:
+					for _, nk := range []string{"name", "serviceName", "dom"} {
+						if s, ok := v[nk].(string); ok {
+							name = s
+							break
+						}
+					}
+				}
+				if strings.Contains(strings.ToLower(name), q) {
+					kept = append(kept, it)
+				}
+			}
+			m[key] = kept
+			m["count"] = len(kept)
+		case []string:
+			kept := make([]string, 0, len(arr))
+			for _, s := range arr {
+				if strings.Contains(strings.ToLower(s), q) {
+					kept = append(kept, s)
+				}
+			}
+			m[key] = kept
+			m["count"] = len(kept)
+		}
+	}
+	return m
+}

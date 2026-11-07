@@ -118,7 +118,7 @@ Without --all, --data-id is required. Same-second runs get a -2, -3 suffix (neve
 					OK:     true,
 					DryRun: true,
 					Risk:   risk.Read,
-					Would:  would,
+					Would:  output.AsWould(would),
 				})
 			}
 			wd, _ := os.Getwd()

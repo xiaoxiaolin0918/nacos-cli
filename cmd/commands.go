@@ -72,15 +72,18 @@ func (a *App) commandsPayload(root *cobra.Command) map[string]any {
 	}
 	walk(root, "")
 	return map[string]any{
-		"name":     version.Name,
-		"version":  version.Version,
-		"envelope": "ok-json",
-		"commands": list,
+		"name":                  version.Name,
+		"version":               version.Version,
+		"envelope":              "ok-json",
+		"capabilities_schema":   output.CapabilitiesSchemaVersion,
+		"would":                 "array",
+		"redact_fields":         output.DefaultRedactFields,
+		"commands":              list,
 		"global_flags": []string{
 			"--server", "--username", "--namespace", "--profile", "--config",
 			"--format", "--output", "--dry-run", "--yes",
 			"--auto-login", "--auto-renew",
-			"--check-update", "--auto-update", "--help-json",
+			"--check-update", "--auto-update", "--help-json", "--trace",
 		},
 		"error_codes": []string{
 			output.CodeConfirmationRequired,
@@ -88,6 +91,8 @@ func (a *App) commandsPayload(root *cobra.Command) map[string]any {
 			output.CodeCLIError,
 			output.CodeDoctorFailed,
 			output.CodeUpdateFailed,
+			output.CodePasswordRequired,
+			output.CodeMissingFlag,
 			"http_401", "http_403", "http_N",
 		},
 		"update": map[string]any{

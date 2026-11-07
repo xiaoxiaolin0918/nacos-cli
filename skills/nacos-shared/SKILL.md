@@ -1,6 +1,6 @@
 ---
 name: nacos-shared
-version: 0.3.5
+version: 0.3.6
 description: "Use for nacos-cli (Go) setup/auth: auth login [--remember]/status/logout [--forget], --auto-login, whoami, doctor, .env + credentials.json + optional encrypted login.cred, AUTH_DISABLED skip, --dry-run/--yes write gates, skills list/read, profile list/show/set, --profile/--config/--output, repl/interactive shell, backup path/list/create. Risk: read (status/doctor) | write (login)."
 metadata:
   requires:
@@ -115,3 +115,10 @@ Override: `NACOS_CREDENTIALS_PATH`.
 - `nacos update --check|--yes`
 - Optional: `--check-update` / `--auto-update` (default off; see docs/wiki/Update.md)
 - `nacos commands` / `--help-json` for risk table; errors carry `error.code`
+
+## AI-friendly (nacos ≥ 0.3.6+)
+
+- Dry-run: `would` is an **array**. Prefer `nacos examples` / `nacos commands` before inventing flags.
+- Optional `--trace` for `meta.duration_ms` / `renewed`.
+- List: `--limit` / `--query`. Non-TTY: never prompt for password.
+

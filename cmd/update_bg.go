@@ -105,6 +105,7 @@ func (a *App) maybeBackgroundUpdate(cmd *cobra.Command) {
 	if shouldSkipBackgroundUpdate(cmd) {
 		return
 	}
+	a.traceUpdateChecked = true
 	cache, ok := loadUpdateCheckCache()
 	if ok && time.Since(cache.CheckedAt) < updateCheckCacheTTL && cache.Latest != "" {
 		if cache.Status == "outdated" && CompareSemver(version.Version, cache.Latest) == RelOutdated {

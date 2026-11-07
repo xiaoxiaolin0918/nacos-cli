@@ -30,7 +30,11 @@ func (a *App) wireAutoRenew() {
 		return
 	}
 	a.client.RenewOnce = func(ctx context.Context) error {
-		return a.silentLogin(ctx)
+		err := a.silentLogin(ctx)
+		if err == nil {
+			a.traceRenewed = true
+		}
+		return err
 	}
 }
 

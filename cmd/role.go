@@ -18,14 +18,16 @@ func (a *App) newRoleCmd() *cobra.Command {
 }
 
 func (a *App) newRoleListCmd() *cobra.Command {
-	var username, role string
-	var page, pageSize int
+	var username, role, query string
+	var page, pageSize, limit int
 	cmd := &cobra.Command{
 		Use: "list",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			applyLimitAlias(cmd, &pageSize, limit)
+			applyQueryFallback(&username, query)
 			uc := domain.RoleUseCase{Port: a.client}
 			out, err := uc.List(username, role, page, pageSize)
 			if err != nil {
@@ -36,8 +38,8 @@ func (a *App) newRoleListCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&username, "username", "", "blur username filter")
 	cmd.Flags().StringVar(&role, "role", "", "role filter (optional)")
-	cmd.Flags().IntVar(&page, "page", 1, "pageNo")
-	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize")
+	cmd.Flags().StringVar(&query, "query", "", "Agent-friendly alias: fills --username when empty")
+	addListPageFlags(cmd, &page, &pageSize, &limit)
 	mark(cmd, risk.Read, "List roles / user-role bindings")
 	return cmd
 }

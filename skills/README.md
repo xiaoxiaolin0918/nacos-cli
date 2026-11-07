@@ -13,3 +13,11 @@ Trae-style agent skills for the **Go** mainline.
 .\nacos.ps1 skills list
 .\nacos.ps1 skills read nacos-acl-ops
 ```
+
+## AI surfaces
+
+- `nacos commands` / `--help-json` — capability table
+- `nacos examples [--command X]` — baked JSON samples
+- `--trace` — envelope `meta` (default off)
+- dry-run `would[]` array; list `--limit`/`--query`
+

@@ -26,6 +26,10 @@ func classifyError(err error, level string) output.ErrorBody {
 		body.Code = output.CodeServerUnset
 		return body
 	}
+	if strings.Contains(strings.ToLower(msg), "password required") {
+		body.Code = output.CodePasswordRequired
+		return body
+	}
 	if m := httpStatusRE.FindStringSubmatch(msg); len(m) == 2 {
 		body.Type = "http"
 		body.Code = "http_" + m[1]

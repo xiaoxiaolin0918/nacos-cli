@@ -64,14 +64,29 @@ func TestACLUserCreateGateMasksPassword(t *testing.T) {
 	if env["dry_run"] != true {
 		t.Fatalf("%v", env)
 	}
-	would, _ := env["would"].(map[string]any)
-	if would["username"] != "alice" {
-		t.Fatalf("%v", would)
+	would := firstWould(env["would"])
+	if would == nil || would["username"] != "alice" {
+		t.Fatalf("%v", env["would"])
 	}
 	if _, ok := would["password"]; ok {
 		t.Fatal("password key must not appear")
 	}
 }
+
+func firstWould(v any) map[string]any {
+	switch w := v.(type) {
+	case []any:
+		if len(w) > 0 {
+			if m, ok := w[0].(map[string]any); ok {
+				return m
+			}
+		}
+	case map[string]any:
+		return w
+	}
+	return nil
+}
+
 
 func TestACLPermissionGrantRequiresYes(t *testing.T) {
 	root := NewRoot()

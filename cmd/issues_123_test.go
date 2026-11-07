@@ -60,7 +60,10 @@ func TestPublishDryRunInfersTypeAndEffectivePublicNS(t *testing.T) {
 	if env["dry_run"] != true {
 		t.Fatalf("%s", buf.String())
 	}
-	would := env["would"].(map[string]any)
+	would := firstWould(env["would"])
+	if would == nil {
+		t.Fatalf("would missing: %v", env)
+	}
 	if would["type"] != "yaml" {
 		t.Fatalf("expected inferred yaml, got %v", would["type"])
 	}
@@ -214,7 +217,10 @@ func TestPublishDryRunPublicNSWithProdProfile(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
 		t.Fatal(err, buf.String())
 	}
-	would := env["would"].(map[string]any)
+	would := firstWould(env["would"])
+	if would == nil {
+		t.Fatalf("would missing: %v", env)
+	}
 	if ns, _ := would["namespace"].(string); ns != "" {
 		t.Fatalf("namespace=%q want empty (explicit public must not keep profile prod)", ns)
 	}

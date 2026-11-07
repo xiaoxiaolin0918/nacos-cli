@@ -46,3 +46,5 @@ nacos --help-json
 ## 错误 code
 
 失败信封 `error.code` 稳定字符串，见 [Errors.md](Errors.md)。
+
+另见 [AI.md](AI.md)（would[] / examples / --trace）。

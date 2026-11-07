@@ -18,14 +18,16 @@ func (a *App) newPermissionCmd() *cobra.Command {
 }
 
 func (a *App) newPermissionListCmd() *cobra.Command {
-	var role string
-	var page, pageSize int
+	var role, query string
+	var page, pageSize, limit int
 	cmd := &cobra.Command{
 		Use: "list",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := a.requireServer(cmd); err != nil {
 				return err
 			}
+			applyLimitAlias(cmd, &pageSize, limit)
+			applyQueryFallback(&role, query)
 			uc := domain.PermissionUseCase{Port: a.client}
 			out, err := uc.List(role, page, pageSize)
 			if err != nil {
@@ -35,8 +37,8 @@ func (a *App) newPermissionListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&role, "role", "", "role name filter")
-	cmd.Flags().IntVar(&page, "page", 1, "pageNo")
-	cmd.Flags().IntVar(&pageSize, "page-size", 100, "pageSize")
+	cmd.Flags().StringVar(&query, "query", "", "Agent-friendly alias: fills --role when empty")
+	addListPageFlags(cmd, &page, &pageSize, &limit)
 	mark(cmd, risk.Read, "List permissions for a role")
 	return cmd
 }
